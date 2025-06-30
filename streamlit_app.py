@@ -333,31 +333,459 @@ def main():
     if not config:
         return
     
-    # Sidebar for navigation
-    st.sidebar.title("Navigation")
-    page = st.sidebar.selectbox("Choose a page", [
-        "🏠 Dashboard", 
-        "🔑 Quick Setup (Your API Keys)",
-        "🎯 Brand Management", 
-        "📊 Run Analysis",
-        "📈 Visual Insights",
-        "📄 View Reports"
-    ])
+    # Check if user has completed setup steps
+    has_api_keys = ('temp_apify_key' in st.session_state and st.session_state.temp_apify_key) and \
+                   ('temp_claude_key' in st.session_state and st.session_state.temp_claude_key)
+    has_brands = ('selected_brands' in st.session_state and st.session_state.selected_brands) or \
+                 ('quick_brands' in st.session_state and st.session_state.quick_brands)
     
-    if page == "🏠 Dashboard":
-        show_dashboard(config)
-    elif page == "🔑 Quick Setup (Your API Keys)":
-        show_quick_setup()
+    # Sidebar for navigation with step progress
+    st.sidebar.title("🎯 Competitive Intel")
+    
+    # Progress indicator
+    st.sidebar.markdown("### Setup Progress")
+    step1_status = "✅" if has_api_keys else "1️⃣"
+    step2_status = "✅" if has_brands else "2️⃣" if has_api_keys else "⏸️"
+    step3_status = "✅" if has_api_keys and has_brands else "3️⃣" if has_api_keys and has_brands else "⏸️"
+    
+    st.sidebar.markdown(f"""
+    {step1_status} **Step 1**: API Keys  
+    {step2_status} **Step 2**: Select Brands  
+    {step3_status} **Step 3**: Run Analysis  
+    """)
+    
+    # Navigation based on setup status
+    if not has_api_keys:
+        # Force to Step 1 if no API keys
+        available_pages = ["1️⃣ Step 1: Enter API Keys"]
+        default_page = "1️⃣ Step 1: Enter API Keys"
+    elif not has_brands:
+        # Step 1 complete, show Step 2
+        available_pages = [
+            "1️⃣ Step 1: Enter API Keys",
+            "2️⃣ Step 2: Select Brands"
+        ]
+        default_page = "2️⃣ Step 2: Select Brands"
+    else:
+        # All steps available
+        available_pages = [
+            "1️⃣ Step 1: Enter API Keys",
+            "2️⃣ Step 2: Select Brands", 
+            "3️⃣ Step 3: Run Analysis",
+            "📈 Visual Insights",
+            "📄 View Reports"
+        ]
+        default_page = "3️⃣ Step 3: Run Analysis"
+    
+    # Add advanced options for experienced users
+    st.sidebar.markdown("---")
+    show_advanced = st.sidebar.checkbox("🔧 Show All Pages", help="Access all features directly")
+    
+    if show_advanced:
+        available_pages = [
+            "1️⃣ Step 1: Enter API Keys",
+            "2️⃣ Step 2: Select Brands", 
+            "3️⃣ Step 3: Run Analysis",
+            "🎯 Brand Management", 
+            "📈 Visual Insights",
+            "📄 View Reports"
+        ]
+    
+    page = st.sidebar.selectbox("Choose a page", available_pages, 
+                               index=0 if not show_advanced else available_pages.index(default_page) if default_page in available_pages else 0)
+    
+    if page == "1️⃣ Step 1: Enter API Keys":
+        show_step1_api_keys()
+    elif page == "2️⃣ Step 2: Select Brands":
+        show_step2_brand_selection(config)
+    elif page == "3️⃣ Step 3: Run Analysis":
+        show_step3_run_analysis(config)
     elif page == "🎯 Brand Management":
         show_brand_management(config)
-    elif page == "📊 Run Analysis":
-        show_run_analysis(config)
     elif page == "📈 Visual Insights":
         # Get insights from session state if available
         insights = st.session_state.get('analysis_insights', {})
         show_insights_dashboard(insights)
     elif page == "📄 View Reports":
         show_reports()
+
+def show_step1_api_keys():
+    """Step 1: API Keys Setup"""
+    st.markdown("# 1️⃣ Step 1: Enter Your API Keys")
+    st.markdown("---")
+    
+    st.markdown("""
+    ### Welcome to Competitive Intelligence Tool! 🎯
+    
+    To get started, you'll need API keys for data collection and analysis:
+    - **Apify**: Scrapes Facebook Ad Library data
+    - **Claude**: Analyzes ads and provides strategic insights
+    
+    *Your keys are stored only for this browser session and will be cleared when you close the tab.*
+    """)
+    
+    # API Key inputs in a cleaner layout
+    st.markdown("### 🔑 Your API Keys")
+    
+    col1, col2 = st.columns(2, gap="large")
+    
+    with col1:
+        st.markdown("#### 🔍 Apify API Key")
+        apify_key = st.text_input(
+            "Enter your Apify API token",
+            value=st.session_state.get('temp_apify_key', ''),
+            type="password",
+            placeholder="apify_api_...",
+            key="step1_apify"
+        )
+        st.markdown("**[Get your free Apify key →](https://console.apify.com/account/integrations)**")
+        st.caption("Free tier: 1,000 results/month")
+        
+        if apify_key:
+            st.session_state.temp_apify_key = apify_key
+            st.success("✅ Apify key set!")
+    
+    with col2:
+        st.markdown("#### 🧠 Claude API Key")
+        claude_key = st.text_input(
+            "Enter your Claude API key",
+            value=st.session_state.get('temp_claude_key', ''),
+            type="password", 
+            placeholder="sk-ant-...",
+            key="step1_claude"
+        )
+        st.markdown("**[Get your Claude key →](https://console.anthropic.com)**")
+        st.caption("$5 free credit for new users")
+        
+        if claude_key:
+            st.session_state.temp_claude_key = claude_key
+            st.success("✅ Claude key set!")
+    
+    # Progress check
+    st.markdown("---")
+    st.markdown("### ✅ Setup Status")
+    
+    has_apify = 'temp_apify_key' in st.session_state and st.session_state.temp_apify_key
+    has_claude = 'temp_claude_key' in st.session_state and st.session_state.temp_claude_key
+    
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        if has_apify:
+            st.success("✅ Apify Ready")
+        else:
+            st.error("❌ Apify Needed")
+    
+    with col2:
+        if has_claude:
+            st.success("✅ Claude Ready")
+        else:
+            st.error("❌ Claude Needed")
+    
+    with col3:
+        if has_apify and has_claude:
+            st.success("🎉 Ready for Step 2!")
+            if st.button("➡️ Continue to Step 2: Select Brands", type="primary", use_container_width=True):
+                st.rerun()
+        else:
+            st.warning("⏳ Complete setup above")
+    
+    # Help section
+    if not (has_apify and has_claude):
+        st.markdown("---")
+        with st.expander("🆘 Need help getting API keys?"):
+            st.markdown("""
+            **Apify Setup:**
+            1. Go to [console.apify.com](https://console.apify.com)
+            2. Sign up for free account
+            3. Go to Account → Integrations
+            4. Copy your API token
+            
+            **Claude Setup:**
+            1. Go to [console.anthropic.com](https://console.anthropic.com)
+            2. Sign up and verify email
+            3. Go to API Keys section
+            4. Create new API key
+            """)
+
+def show_step2_brand_selection(config):
+    """Step 2: Brand Selection"""
+    st.markdown("# 2️⃣ Step 2: Select Brands to Analyze")
+    st.markdown("---")
+    
+    st.markdown("""
+    ### Choose which brands you want to analyze 🎯
+    
+    You can analyze pre-configured example brands or add your own custom brands.
+    """)
+    
+    # Initialize selected brands if not exists
+    if 'selected_brands' not in st.session_state:
+        st.session_state.selected_brands = []
+    
+    # Pre-configured brands
+    st.markdown("### 📋 Pre-configured Example Brands")
+    st.markdown("*These brands are ready to analyze - just check the boxes!*")
+    
+    available_brands = config.get("brands", {})
+    
+    if available_brands:
+        for brand_name, brand_config in available_brands.items():
+            if brand_config.get("active", True):
+                is_selected = st.checkbox(
+                    f"**{brand_name}** - {brand_config.get('domain', 'No domain')}",
+                    value=brand_name in st.session_state.selected_brands,
+                    key=f"brand_select_{brand_name}"
+                )
+                
+                if is_selected and brand_name not in st.session_state.selected_brands:
+                    st.session_state.selected_brands.append(brand_name)
+                elif not is_selected and brand_name in st.session_state.selected_brands:
+                    st.session_state.selected_brands.remove(brand_name)
+    else:
+        st.info("No pre-configured brands available.")
+    
+    # Custom brand addition
+    st.markdown("---")
+    st.markdown("### ➕ Add Your Own Brand")
+    
+    with st.expander("Add Custom Brand"):
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            custom_brand_name = st.text_input("Brand Name", placeholder="e.g., Your Competitor")
+            custom_facebook_id = st.text_input("Facebook Page ID", placeholder="e.g., 123456789")
+        
+        with col2:
+            custom_domain = st.text_input("Website Domain", placeholder="e.g., competitor.com")
+            
+        if st.button("➕ Add This Brand"):
+            if custom_brand_name and (custom_facebook_id or custom_domain):
+                # Store in session state
+                if 'quick_brands' not in st.session_state:
+                    st.session_state.quick_brands = {}
+                
+                st.session_state.quick_brands[custom_brand_name] = {
+                    "facebook_id": custom_facebook_id,
+                    "domain": custom_domain,
+                    "active": True
+                }
+                
+                # Add to selected brands
+                if custom_brand_name not in st.session_state.selected_brands:
+                    st.session_state.selected_brands.append(custom_brand_name)
+                
+                st.success(f"✅ Added {custom_brand_name}!")
+                st.rerun()
+            else:
+                st.error("Please provide at least brand name and Facebook ID or domain")
+    
+    # Show custom brands if any
+    if 'quick_brands' in st.session_state and st.session_state.quick_brands:
+        st.markdown("#### Your Custom Brands:")
+        for brand_name, brand_config in st.session_state.quick_brands.items():
+            col1, col2 = st.columns([3, 1])
+            with col1:
+                st.write(f"🏢 **{brand_name}** - {brand_config.get('domain', 'No domain')}")
+            with col2:
+                if st.button("🗑️", key=f"delete_{brand_name}", help="Remove brand"):
+                    del st.session_state.quick_brands[brand_name]
+                    if brand_name in st.session_state.selected_brands:
+                        st.session_state.selected_brands.remove(brand_name)
+                    st.rerun()
+    
+    # Selection summary and continue
+    st.markdown("---")
+    st.markdown("### 📊 Analysis Selection")
+    
+    total_selected = len(st.session_state.selected_brands)
+    
+    if total_selected > 0:
+        st.success(f"✅ **{total_selected} brand(s) selected for analysis:**")
+        for brand in st.session_state.selected_brands:
+            st.write(f"• {brand}")
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.button("⬅️ Back to Step 1", use_container_width=True):
+                st.rerun()
+        with col2:
+            if st.button("➡️ Continue to Step 3: Run Analysis", type="primary", use_container_width=True):
+                st.rerun()
+    else:
+        st.warning("⚠️ Please select at least one brand to analyze")
+        if st.button("⬅️ Back to Step 1", use_container_width=True):
+            st.rerun()
+
+def show_step3_run_analysis(config):
+    """Step 3: Run Analysis"""
+    st.markdown("# 3️⃣ Step 3: Run Analysis")
+    st.markdown("---")
+    
+    # Get session-enhanced config
+    session_config = get_session_config(config)
+    
+    # Add selected brands to config
+    if 'selected_brands' in st.session_state:
+        # Filter brands based on selection
+        selected_brand_configs = {}
+        
+        # Add selected pre-configured brands
+        for brand_name in st.session_state.selected_brands:
+            if brand_name in config.get("brands", {}):
+                selected_brand_configs[brand_name] = config["brands"][brand_name]
+        
+        # Add selected custom brands
+        if 'quick_brands' in st.session_state:
+            for brand_name in st.session_state.selected_brands:
+                if brand_name in st.session_state.quick_brands:
+                    selected_brand_configs[brand_name] = st.session_state.quick_brands[brand_name]
+        
+        session_config['brands'] = selected_brand_configs
+    
+    # Analysis summary
+    st.markdown("### 🎯 Analysis Summary")
+    
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        total_brands = len(st.session_state.get('selected_brands', []))
+        st.metric("Brands to Analyze", total_brands)
+    
+    with col2:
+        st.metric("Max Ads per Brand", session_config.get('analysis', {}).get('max_ads_per_brand', 10))
+    
+    with col3:
+        st.metric("Lookback Days", session_config.get('analysis', {}).get('lookback_days', 7))
+    
+    # Show selected brands
+    if st.session_state.get('selected_brands'):
+        st.markdown("**Selected Brands:**")
+        for brand in st.session_state.selected_brands:
+            st.write(f"• {brand}")
+    else:
+        st.error("❌ No brands selected. Go back to Step 2.")
+        if st.button("⬅️ Back to Step 2"):
+            st.rerun()
+        return
+    
+    # Analysis options
+    st.markdown("---")
+    st.markdown("### ⚙️ Analysis Options")
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        analyze_all = st.radio(
+            "Analysis Scope",
+            ["All selected brands", "Single brand only"],
+            help="Choose whether to analyze all brands or focus on one"
+        )
+        
+        if analyze_all == "Single brand only":
+            single_brand = st.selectbox("Choose brand", st.session_state.selected_brands)
+        else:
+            single_brand = None
+    
+    with col2:
+        include_notifications = st.checkbox(
+            "Send Notifications",
+            value=False,
+            help="Send results via webhook (if configured)"
+        )
+    
+    # Run analysis button
+    st.markdown("---")
+    
+    col1, col2 = st.columns([1, 2])
+    with col1:
+        if st.button("⬅️ Back to Step 2", use_container_width=True):
+            st.rerun()
+    
+    with col2:
+        if st.button("🚀 Run Competitive Analysis", type="primary", use_container_width=True):
+            if "analysis_running" not in st.session_state:
+                st.session_state.analysis_running = False
+            
+            if not st.session_state.analysis_running:
+                st.session_state.analysis_running = True
+                
+                with st.spinner("🔄 Running competitive intelligence analysis..."):
+                    try:
+                        # Initialize tool with session config
+                        intel = CompetitiveIntel()
+                        intel.config = session_config
+                        
+                        # Override notification setting
+                        intel.config["notifications"]["enabled"] = include_notifications
+                        
+                        # Run analysis
+                        brand_to_analyze = single_brand if analyze_all == "Single brand only" else None
+                        
+                        st.info("🔄 Starting analysis... This may take 1-2 minutes per brand.")
+                        report, insights = intel.run_analysis(brand_to_analyze)
+                        
+                        if report and insights:
+                            st.success("✅ Analysis completed successfully!")
+                            
+                            # Store insights for visual dashboard
+                            st.session_state.analysis_insights = insights
+                            
+                            # Show key metrics
+                            total_ads = sum(brand_insights.get('performance_indicators', {}).get('total_ads', 0) 
+                                          for brand_insights in insights.values())
+                            
+                            col1, col2, col3 = st.columns(3)
+                            with col1:
+                                st.metric("Total Ads Found", total_ads)
+                            with col2:
+                                st.metric("Brands Analyzed", len(insights))
+                            with col3:
+                                active_ads = sum(brand_insights.get('performance_indicators', {}).get('active_ads', 0) 
+                                               for brand_insights in insights.values())
+                                st.metric("Active Ads", active_ads)
+                            
+                            # Action buttons
+                            st.markdown("### 🎉 Analysis Complete! What's next?")
+                            
+                            col1, col2, col3 = st.columns(3)
+                            with col1:
+                                st.download_button(
+                                    "📥 Download Report",
+                                    data=report,
+                                    file_name=f"competitive_analysis_{datetime.now().strftime('%Y%m%d_%H%M%S')}.md",
+                                    mime="text/markdown",
+                                    use_container_width=True
+                                )
+                            
+                            with col2:
+                                if st.button("📊 View Visual Insights", use_container_width=True):
+                                    st.session_state.goto_insights = True
+                                    st.rerun()
+                            
+                            with col3:
+                                if st.button("🔄 Analyze Different Brands", use_container_width=True):
+                                    # Reset selections for new analysis
+                                    st.session_state.selected_brands = []
+                                    if 'quick_brands' in st.session_state:
+                                        del st.session_state.quick_brands
+                                    st.rerun()
+                            
+                            # Show report preview
+                            st.markdown("---")
+                            st.markdown("### 📄 Report Preview")
+                            st.markdown(report[:1000] + "..." if len(report) > 1000 else report)
+                            
+                        else:
+                            st.error("❌ Analysis failed. Please check your API keys and try again.")
+                    
+                    except Exception as e:
+                        st.error(f"❌ Analysis error: {str(e)}")
+                        st.markdown("**Common issues:**")
+                        st.markdown("- Invalid API keys")
+                        st.markdown("- Insufficient API credits")
+                        st.markdown("- Network connectivity issues")
+                    
+                    finally:
+                        st.session_state.analysis_running = False
 
 def show_quick_setup():
     """Quick setup page for session-based API keys"""
