@@ -161,7 +161,7 @@ def show_dashboard(config):
     
     # Check API keys
     api_status = []
-    if config["apify"]["api_token"]:
+    if config.get("apify", {}).get("api_token"):
         api_status.append("✅ Apify API configured")
     else:
         api_status.append("❌ Apify API token missing")
@@ -286,7 +286,7 @@ def show_settings(config):
         st.markdown("**Apify API**")
         apify_token = st.text_input(
             "API Token",
-            value=config["apify"]["api_token"],
+            value=config.get("apify", {}).get("api_token", ""),
             type="password",
             help="Your Apify API token for Facebook ad scraping"
         )
@@ -363,9 +363,9 @@ def show_run_analysis(config):
     
     # Check configuration
     missing_config = []
-    if not config["apify"]["api_token"]:
+    if not config.get("apify", {}).get("api_token"):
         missing_config.append("Apify API token")
-    if not config["claude"]["api_key"]:
+    if not config.get("claude", {}).get("api_key"):
         missing_config.append("Claude API key")
     
     if missing_config:
