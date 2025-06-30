@@ -7,6 +7,7 @@ Simple script to collect and analyze competitor ads
 import json
 import requests
 import os
+import time
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional
 import argparse
@@ -20,9 +21,8 @@ class CompetitiveIntel:
     def load_config(self, path: str) -> Dict:
         """Load configuration from JSON file"""
         default_config = {
-            "adyntel": {
-                "api_key": "",
-                "email": ""
+            "apify": {
+                "api_token": ""
             },
             "claude": {
                 "api_key": ""
@@ -56,67 +56,103 @@ class CompetitiveIntel:
             return default_config
     
     def collect_ads(self, brand_name: str, brand_config: Dict) -> List[Dict]:
-        """Collect ads for a specific brand using Adyntel API"""
+        """Collect ads for a specific brand using Apify Facebook Ad Library scraper"""
         print(f"📊 Collecting ads for {brand_name}...")
         
-        url = "https://api.adyntel.com/facebook"
+        if not self.config["apify"]["api_token"]:
+            print("  ❌ Apify API token not configured")
+            return []
         
-        # Try multiple request configurations based on Adyntel docs
-        request_variations = []
-        
-        if brand_config.get("domain"):
-            request_variations.extend([
-                {
-                    "api_key": self.config["adyntel"]["api_key"],
-                    "email": self.config["adyntel"]["email"],
-                    "company_domain": brand_config["domain"]
-                }
-            ])
-        
+        # Prepare Facebook page URL
+        facebook_url = None
         if brand_config.get("facebook_id"):
-            # Try different Facebook URL formats
-            request_variations.extend([
-                {
-                    "api_key": self.config["adyntel"]["api_key"],
-                    "email": self.config["adyntel"]["email"],
-                    "facebook_url": f"https://www.facebook.com/{brand_config['facebook_id']}"
-                },
-                {
-                    "api_key": self.config["adyntel"]["api_key"],
-                    "email": self.config["adyntel"]["email"],
-                    "facebook_url": f"https://facebook.com/{brand_config['facebook_id']}"
-                },
-                {
-                    "api_key": self.config["adyntel"]["api_key"],
-                    "email": self.config["adyntel"]["email"],
-                    "facebook_url": f"facebook.com/{brand_config['facebook_id']}"
-                }
-            ])
+            facebook_url = f"https://www.facebook.com/{brand_config['facebook_id']}"
+        elif brand_config.get("domain"):
+            # Try to construct Facebook URL from domain
+            facebook_url = f"https://www.facebook.com/{brand_config['domain'].replace('.com', '').replace('.', '')}"
         
-        ads = []
-        for i, request_body in enumerate(request_variations):
-            try:
-                print(f"  📤 Attempt {i+1}/{len(request_variations)}")
+        if not facebook_url:
+            print("  ❌ No Facebook URL available for this brand")
+            return []
+        
+        print(f"  🔍 Scraping: {facebook_url}")
+        
+        # Prepare Apify Actor input
+        actor_input = {
+            "startUrls": [{"url": facebook_url}],
+            "resultsLimit": self.config["analysis"]["max_ads_per_brand"],
+            "activeStatus": ""  # Get all ads
+        }
+        
+        try:
+            # Start Apify Actor
+            print("  🚀 Starting Apify actor...")
+            
+            actor_url = "https://api.apify.com/v2/acts/JJghSZmShuco4j9gJ/runs"
+            headers = {
+                "Authorization": f"Bearer {self.config['apify']['api_token']}",
+                "Content-Type": "application/json"
+            }
+            
+            # Start the actor run
+            response = self.session.post(actor_url, json=actor_input, headers=headers, timeout=30)
+            
+            if response.status_code != 201:
+                print(f"  ❌ Failed to start actor: {response.status_code}")
+                print(f"  📄 Response: {response.text}")
+                return []
+            
+            run_data = response.json()
+            run_id = run_data["data"]["id"]
+            
+            print(f"  ⏳ Actor run started: {run_id}")
+            print("  ⌛ Waiting for completion (max 2 minutes)...")
+            
+            # Wait for completion (max 2 minutes)
+            max_wait = 120  # 2 minutes
+            wait_time = 0
+            
+            while wait_time < max_wait:
+                # Check run status
+                status_url = f"https://api.apify.com/v2/acts/JJghSZmShuco4j9gJ/runs/{run_id}"
+                status_response = self.session.get(status_url, headers=headers, timeout=10)
                 
-                response = self.session.post(url, json=request_body, timeout=30)
-                
-                if response.status_code == 200:
-                    data = response.json()
-                    if data.get("results"):
-                        ads = data["results"]
-                        print(f"  ✅ Found {len(ads)} ads")
-                        break
-                elif response.status_code == 204:
-                    print(f"  📥 No ads found with configuration {i+1}")
-                else:
-                    print(f"  ❌ API error: {response.status_code}")
+                if status_response.status_code == 200:
+                    status_data = status_response.json()
+                    status = status_data["data"]["status"]
                     
-            except Exception as e:
-                print(f"  ❌ Request failed: {str(e)}")
-        
-        # Limit ads processed
-        max_ads = self.config["analysis"]["max_ads_per_brand"]
-        return ads[:max_ads] if ads else []
+                    if status == "SUCCEEDED":
+                        print("  ✅ Actor completed successfully")
+                        break
+                    elif status in ["FAILED", "ABORTED", "TIMED-OUT"]:
+                        print(f"  ❌ Actor failed with status: {status}")
+                        return []
+                    else:
+                        print(f"  ⏳ Status: {status}")
+                
+                time.sleep(10)  # Wait 10 seconds
+                wait_time += 10
+            
+            if wait_time >= max_wait:
+                print("  ⏰ Actor timed out, trying to get partial results...")
+            
+            # Get results from dataset
+            dataset_id = run_data["data"]["defaultDatasetId"]
+            dataset_url = f"https://api.apify.com/v2/datasets/{dataset_id}/items"
+            
+            results_response = self.session.get(dataset_url, headers=headers, timeout=30)
+            
+            if results_response.status_code == 200:
+                ads = results_response.json()
+                print(f"  ✅ Found {len(ads)} ads")
+                return ads[:self.config["analysis"]["max_ads_per_brand"]]
+            else:
+                print(f"  ❌ Failed to get results: {results_response.status_code}")
+                return []
+                
+        except Exception as e:
+            print(f"  ❌ Apify request failed: {str(e)}")
+            return []
     
     def analyze_with_claude(self, brand_name: str, ads: List[Dict]) -> str:
         """Analyze ads using Claude API"""

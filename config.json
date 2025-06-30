@@ -1,7 +1,6 @@
 {
-  "adyntel": {
-    "api_key": "",
-    "email": ""
+  "apify": {
+    "api_token": ""
   },
   "claude": {
     "api_key": ""

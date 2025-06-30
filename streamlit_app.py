@@ -65,7 +65,7 @@ def load_config():
     except FileNotFoundError:
         # Create default config for first run
         default_config = {
-            "adyntel": {"api_key": "", "email": ""},
+            "apify": {"api_token": ""},
             "claude": {"api_key": ""},
             "brands": {
                 "AG1": {
@@ -161,10 +161,10 @@ def show_dashboard(config):
     
     # Check API keys
     api_status = []
-    if config["adyntel"]["api_key"]:
-        api_status.append("✅ Adyntel API configured")
+    if config["apify"]["api_token"]:
+        api_status.append("✅ Apify API configured")
     else:
-        api_status.append("❌ Adyntel API key missing")
+        api_status.append("❌ Apify API token missing")
     
     if config["claude"]["api_key"]:
         api_status.append("✅ Claude API configured")
@@ -283,18 +283,14 @@ def show_settings(config):
     col1, col2 = st.columns(2)
     
     with col1:
-        st.markdown("**Adyntel API**")
-        adyntel_key = st.text_input(
-            "API Key",
-            value=config["adyntel"]["api_key"],
+        st.markdown("**Apify API**")
+        apify_token = st.text_input(
+            "API Token",
+            value=config["apify"]["api_token"],
             type="password",
-            help="Your Adyntel API key for competitor ad data"
+            help="Your Apify API token for Facebook ad scraping"
         )
-        adyntel_email = st.text_input(
-            "Email",
-            value=config["adyntel"]["email"],
-            help="Email associated with your Adyntel account"
-        )
+        st.markdown("*Get token from: [console.apify.com](https://console.apify.com/account/integrations)*")
     
     with col2:
         st.markdown("**Claude API**")
@@ -349,8 +345,7 @@ def show_settings(config):
     
     # Save settings
     if st.button("💾 Save Settings"):
-        config["adyntel"]["api_key"] = adyntel_key
-        config["adyntel"]["email"] = adyntel_email
+        config["apify"]["api_token"] = apify_token
         config["claude"]["api_key"] = claude_key
         config["analysis"]["lookback_days"] = lookback_days
         config["analysis"]["max_ads_per_brand"] = max_ads
@@ -368,10 +363,8 @@ def show_run_analysis(config):
     
     # Check configuration
     missing_config = []
-    if not config["adyntel"]["api_key"]:
-        missing_config.append("Adyntel API key")
-    if not config["adyntel"]["email"]:
-        missing_config.append("Adyntel email")
+    if not config["apify"]["api_token"]:
+        missing_config.append("Apify API token")
     if not config["claude"]["api_key"]:
         missing_config.append("Claude API key")
     
