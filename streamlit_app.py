@@ -349,13 +349,15 @@ def main():
     step1_status = "✅" if has_api_keys else "1️⃣"
     step2_status = "✅" if has_brands else "2️⃣" if has_api_keys else "⏸️"
     step3_status = "✅" if has_completed_analysis else "3️⃣" if has_api_keys and has_brands else "⏸️"
-    step4_status = "4️⃣" if has_completed_analysis else "⏸️"
+    step4_status = "✅" if has_completed_analysis else "4️⃣" if has_completed_analysis else "⏸️"
+    step5_status = "5️⃣" if has_completed_analysis else "⏸️"
     
     st.sidebar.markdown(f"""
     {step1_status} **Step 1**: API Keys  
     {step2_status} **Step 2**: Select Brands  
     {step3_status} **Step 3**: Run Analysis  
-    {step4_status} **Step 4**: Setup Automation  
+    {step4_status} **Step 4**: View Results  
+    {step5_status} **Step 5**: Setup Automation  
     """)
     
     # Navigation based on setup status
@@ -379,16 +381,17 @@ def main():
         ]
         default_page = "3️⃣ Step 3: Run Analysis"
     else:
-        # All steps available including automation
+        # All steps available including results and automation
         available_pages = [
             "1️⃣ Step 1: Enter API Keys",
             "2️⃣ Step 2: Select Brands", 
             "3️⃣ Step 3: Run Analysis",
-            "4️⃣ Step 4: Setup Automation",
+            "4️⃣ Step 4: View Results",
+            "5️⃣ Step 5: Setup Automation",
             "📈 Visual Insights",
             "📄 View Reports"
         ]
-        default_page = "4️⃣ Step 4: Setup Automation"
+        default_page = "4️⃣ Step 4: View Results"
     
     # Add advanced options for experienced users
     st.sidebar.markdown("---")
@@ -399,7 +402,8 @@ def main():
             "1️⃣ Step 1: Enter API Keys",
             "2️⃣ Step 2: Select Brands", 
             "3️⃣ Step 3: Run Analysis",
-            "4️⃣ Step 4: Setup Automation",
+            "4️⃣ Step 4: View Results",
+            "5️⃣ Step 5: Setup Automation",
             "🎯 Brand Management", 
             "📈 Visual Insights",
             "📄 View Reports"
@@ -422,9 +426,14 @@ def main():
             del st.session_state.force_step_3  # Clear the flag
     
     if 'force_step_4' in st.session_state and st.session_state.force_step_4:
-        if "4️⃣ Step 4: Setup Automation" in available_pages:
-            default_page = "4️⃣ Step 4: Setup Automation"
+        if "4️⃣ Step 4: View Results" in available_pages:
+            default_page = "4️⃣ Step 4: View Results"
             del st.session_state.force_step_4  # Clear the flag
+    
+    if 'force_step_5' in st.session_state and st.session_state.force_step_5:
+        if "5️⃣ Step 5: Setup Automation" in available_pages:
+            default_page = "5️⃣ Step 5: Setup Automation"
+            del st.session_state.force_step_5  # Clear the flag
     
     page = st.sidebar.selectbox("Choose a page", available_pages, 
                                index=available_pages.index(default_page) if default_page in available_pages else 0)
@@ -435,8 +444,10 @@ def main():
         show_step2_brand_selection(config)
     elif page == "3️⃣ Step 3: Run Analysis":
         show_step3_run_analysis(config)
-    elif page == "4️⃣ Step 4: Setup Automation":
-        show_step4_automation_setup(config)
+    elif page == "4️⃣ Step 4: View Results":
+        show_step4_view_results(config)
+    elif page == "5️⃣ Step 5: Setup Automation":
+        show_step5_automation_setup(config)
     elif page == "🎯 Brand Management":
         show_brand_management(config)
     elif page == "📈 Visual Insights":
@@ -775,8 +786,9 @@ def show_step3_run_analysis(config):
                         if report and insights:
                             st.success("✅ Analysis completed successfully!")
                             
-                            # Store insights for visual dashboard
+                            # Store insights and report for visual dashboard
                             st.session_state.analysis_insights = insights
+                            st.session_state.last_analysis_report = report
                             
                             # Show key metrics
                             total_ads = sum(brand_insights.get('performance_indicators', {}).get('total_ads', 0) 
@@ -796,7 +808,7 @@ def show_step3_run_analysis(config):
                             st.markdown("### 🎉 Analysis Complete! What's next?")
                             
                             # Primary next step
-                            if st.button("➡️ Continue to Step 4: Setup Automation", type="primary", use_container_width=True):
+                            if st.button("➡️ Continue to Step 4: View Results", type="primary", use_container_width=True):
                                 # Set navigation state to force Step 4
                                 st.session_state.force_step_4 = True
                                 st.rerun()
@@ -843,9 +855,80 @@ def show_step3_run_analysis(config):
                     finally:
                         st.session_state.analysis_running = False
 
-def show_step4_automation_setup(config):
-    """Step 4: Automation & Webhook Setup"""
-    st.markdown("# 4️⃣ Step 4: Setup Automation")
+def show_step4_view_results(config):
+    """Step 4: View Analysis Results"""
+    st.markdown("# 4️⃣ Step 4: View Analysis Results")
+    st.markdown("---")
+    
+    # Check if we have analysis results
+    if 'analysis_insights' not in st.session_state or not st.session_state.analysis_insights:
+        st.error("❌ No analysis results found. Please run analysis in Step 3 first.")
+        if st.button("⬅️ Back to Step 3: Run Analysis"):
+            st.session_state.force_step_3 = True
+            st.rerun()
+        return
+    
+    insights = st.session_state.analysis_insights
+    
+    st.markdown("""
+    ### 🎉 Your Competitive Analysis is Complete!
+    
+    Explore your results below, then set up automation to get regular updates.
+    """)
+    
+    # Analysis overview metrics
+    total_ads = sum(brand_insights.get('performance_indicators', {}).get('total_ads', 0) 
+                   for brand_insights in insights.values())
+    total_brands = len(insights)
+    active_ads = sum(brand_insights.get('performance_indicators', {}).get('active_ads', 0) 
+                    for brand_insights in insights.values())
+    
+    # Top-level metrics
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        st.metric("Brands Analyzed", total_brands)
+    with col2:
+        st.metric("Total Ads Found", total_ads)
+    with col3:
+        st.metric("Active Ads", active_ads)
+    with col4:
+        active_rate = int(active_ads / total_ads * 100) if total_ads > 0 else 0
+        st.metric("Active Rate", f"{active_rate}%")
+    
+    # Show the full visual insights dashboard
+    st.markdown("---")
+    show_insights_dashboard(insights)
+    
+    # Action buttons
+    st.markdown("---")
+    st.markdown("### 🚀 What's Next?")
+    
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        if st.button("⬅️ Back to Step 3", use_container_width=True):
+            st.session_state.force_step_3 = True
+            st.rerun()
+    
+    with col2:
+        if st.button("➡️ Continue to Step 5: Setup Automation", type="primary", use_container_width=True):
+            st.session_state.force_step_5 = True
+            st.rerun()
+    
+    with col3:
+        # Download report button
+        if 'last_analysis_report' in st.session_state:
+            st.download_button(
+                "📥 Download Report",
+                data=st.session_state.last_analysis_report,
+                file_name=f"competitive_analysis_{datetime.now().strftime('%Y%m%d_%H%M%S')}.md",
+                mime="text/markdown",
+                use_container_width=True
+            )
+
+def show_step5_automation_setup(config):
+    """Step 5: Automation & Webhook Setup"""
+    st.markdown("# 5️⃣ Step 5: Setup Automation")
     st.markdown("---")
     
     st.markdown("""
@@ -1304,13 +1387,14 @@ def show_step4_automation_setup(config):
         ✅ Set up API keys for data collection  
         ✅ Selected brands to monitor  
         ✅ Ran your first competitive analysis  
+        ✅ Viewed detailed results and visualizations  
         ✅ Configured automation and webhooks  
         
         **Next steps:**
-        - **View Visual Insights** to explore your data
-        - **Download reports** for deeper analysis  
         - **Set up the Pipedream workflow** for automated delivery
         - **Run regular analysis** to stay ahead of competitors
+        - **Monitor your competitors** with automated reports
+        - **Scale your competitive intelligence** across more brands
         """)
         
         # Action buttons
