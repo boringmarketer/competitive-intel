@@ -177,38 +177,133 @@ class CompetitiveIntel:
         print(f"🧠 Analyzing {len(ads)} ads with Claude...")
         
         try:
-            # Prepare ad data for analysis (handle both Apify and other formats)
+            # Prepare enhanced ad data for strategic analysis
             ad_summary = []
-            for ad in ads[:3]:  # Analyze top 3 ads
-                # Handle Apify format
-                if "adText" in ad:  # Apify format
-                    ad_summary.append({
-                        "headline": ad.get("headline", "") or ad.get("adText", "")[:100],
-                        "body": ad.get("adText", ""),
-                        "landing_page": ad.get("link", "") or ad.get("linkUrl", ""),
-                        "cta": ad.get("ctaText", ""),
-                        "image_url": ad.get("imageUrl", "")
-                    })
-                else:  # Legacy format (Adyntel)
+            for i, ad in enumerate(ads[:5]):  # Analyze top 5 ads for better insights
+                # Handle Apify Facebook Ad Library format
+                if "snapshot" in ad and "cards" in ad.get("snapshot", {}):  # Apify format
+                    snapshot = ad["snapshot"]
+                    cards = snapshot.get("cards", [])
+                    
+                    if cards:
+                        # Get data from first card
+                        card = cards[0]
+                        
+                        # Determine media type and URLs
+                        media_type = "text_only"
+                        media_urls = []
+                        
+                        if card.get("videoHdUrl") or card.get("videoSdUrl"):
+                            media_type = "video"
+                            media_urls = [url for url in [
+                                card.get("videoHdUrl"),
+                                card.get("videoSdUrl"),
+                                card.get("videoPreviewImageUrl")
+                            ] if url]
+                        elif card.get("originalImageUrl"):
+                            media_type = "image"
+                            media_urls = [url for url in [
+                                card.get("originalImageUrl"),
+                                card.get("resizedImageUrl")
+                            ] if url]
+                        
+                        # Extract performance and targeting indicators
+                        platforms = ad.get("publisherPlatform", [])
+                        is_active = ad.get("isActive", False)
+                        start_date = ad.get("startDateFormatted", "")
+                        total_time = ad.get("totalActiveTime", 0)
+                        
+                        ad_summary.append({
+                            "ad_id": ad.get("adArchiveId", f"unknown_{i}"),
+                            "headline": card.get("title", "") or snapshot.get("title", ""),
+                            "body_text": card.get("body", "") or snapshot.get("body", {}).get("text", ""),
+                            "landing_page": card.get("linkUrl", "") or snapshot.get("linkUrl", ""),
+                            "cta_text": card.get("ctaText", "") or snapshot.get("ctaText", ""),
+                            "cta_type": card.get("ctaType", ""),
+                            "link_description": card.get("linkDescription", ""),
+                            
+                            # Creative Analysis
+                            "media_type": media_type,
+                            "media_urls": media_urls,
+                            "contains_ai_content": ad.get("containsDigitalCreatedMedia", False),
+                            "display_format": snapshot.get("displayFormat", ""),
+                            
+                            # Platform & Performance
+                            "platforms": platforms,
+                            "is_active": is_active,
+                            "start_date": start_date,
+                            "days_running": total_time // (24 * 3600) if total_time else 0,
+                            
+                            # Brand Context
+                            "page_name": ad.get("pageName", ""),
+                            "page_category": snapshot.get("pageCategories", []),
+                            "page_likes": snapshot.get("pageLikeCount", 0),
+                            
+                            # Competitive Intelligence
+                            "ad_archive_url": f"https://www.facebook.com/ads/library/?id={ad.get('adArchiveId', '')}"
+                        })
+                    else:
+                        # Fallback to snapshot data
+                        ad_summary.append({
+                            "ad_id": ad.get("adArchiveId", f"unknown_{i}"),
+                            "headline": snapshot.get("title", ""),
+                            "body_text": snapshot.get("body", {}).get("text", "") if isinstance(snapshot.get("body"), dict) else str(snapshot.get("body", "")),
+                            "landing_page": snapshot.get("linkUrl", ""),
+                            "cta_text": snapshot.get("ctaText", ""),
+                            "media_type": "unknown",
+                            "platforms": ad.get("publisherPlatform", []),
+                            "page_name": ad.get("pageName", "")
+                        })
+                else:  # Legacy format (Adyntel or other)
                     snapshot = ad.get("snapshot", {})
                     ad_summary.append({
+                        "ad_id": f"legacy_{i}",
                         "headline": snapshot.get("linkTitle") or snapshot.get("title", ""),
-                        "body": snapshot.get("body") or snapshot.get("adCreativeBody", ""),
+                        "body_text": snapshot.get("body") or snapshot.get("adCreativeBody", ""),
                         "landing_page": snapshot.get("linkUrl", ""),
-                        "cta": "",
-                        "image_url": ""
+                        "cta_text": "",
+                        "media_type": "unknown",
+                        "platforms": ["facebook"],
+                        "page_name": ad.get("pageName", "")
                     })
             
-            prompt = f"""Analyze these {len(ads)} competitor ads from {brand_name}:
+            prompt = f"""Analyze these {len(ads)} competitor ads from {brand_name} for strategic competitive intelligence:
 
 {json.dumps(ad_summary, indent=2)}
 
-Provide a competitive analysis with:
-1. Key messaging themes (3-4 bullets)
-2. Creative patterns observed
-3. 3 specific tactical recommendations for a competitor
+Provide comprehensive competitive analysis with:
 
-Keep analysis concise and actionable - max 300 words."""
+## MESSAGING STRATEGY ANALYSIS
+- Dominant value propositions and positioning themes
+- Language patterns and emotional triggers used
+- Target audience signals from copy tone and style
+- Unique selling proposition differentiation
+
+## CREATIVE STRATEGY INSIGHTS  
+- Media format distribution (video vs image vs text)
+- Visual creative patterns and design themes
+- CTA strategies and conversion optimization approaches
+- Cross-platform creative adaptation patterns
+
+## PERFORMANCE INDICATORS
+- Campaign longevity and testing patterns (days running)
+- Platform distribution strategy (FB/IG/Audience Network)
+- Creative iteration and optimization signals
+- Landing page funnel strategy analysis
+
+## COMPETITIVE GAPS & OPPORTUNITIES
+- Messaging angles they're NOT using
+- Creative formats they're underutilizing  
+- Platform opportunities they're missing
+- Audience segments that appear underserved
+
+## TACTICAL COUNTERMOVES
+- 5 specific copy variations to test against their messaging
+- 3 creative format recommendations to differentiate
+- 2 platform strategy adjustments to outmaneuver them
+- 1 unique positioning angle to exploit their weaknesses
+
+Focus on actionable intelligence for immediate competitive advantage."""
 
             response = requests.post(
                 "https://api.anthropic.com/v1/messages",
@@ -247,16 +342,55 @@ Keep analysis concise and actionable - max 300 words."""
         bodies = []
         landing_pages = []
         
+        # Extract data for analysis using same structure as main analysis
+        media_types = {"video": 0, "image": 0, "text_only": 0}
+        platforms_used = set()
+        cta_types = []
+        active_ads = 0
+        
         for ad in ads:
-            # Handle Apify format
-            if "adText" in ad:  # Apify format
-                if headline := ad.get("headline") or ad.get("adText", "")[:100]:
-                    headlines.append(headline)
-                if body := ad.get("adText"):
-                    bodies.append(body)
-                if url := ad.get("link") or ad.get("linkUrl"):
-                    landing_pages.append(url)
-            else:  # Legacy format (Adyntel)
+            # Handle Apify Facebook Ad Library format
+            if "snapshot" in ad and "cards" in ad.get("snapshot", {}):  # Apify format
+                snapshot = ad["snapshot"]
+                cards = snapshot.get("cards", [])
+                
+                if cards:
+                    # Get data from first card
+                    card = cards[0]
+                    if headline := card.get("title", "") or snapshot.get("title", ""):
+                        headlines.append(headline)
+                    if body := card.get("body", "") or snapshot.get("body", {}).get("text", ""):
+                        bodies.append(body)
+                    if url := card.get("linkUrl", "") or snapshot.get("linkUrl", ""):
+                        landing_pages.append(url)
+                    
+                    # Track media types
+                    if card.get("videoHdUrl") or card.get("videoSdUrl"):
+                        media_types["video"] += 1
+                    elif card.get("originalImageUrl"):
+                        media_types["image"] += 1
+                    else:
+                        media_types["text_only"] += 1
+                    
+                    # Track CTAs
+                    if cta := card.get("ctaText", ""):
+                        cta_types.append(cta)
+                        
+                else:
+                    # Fallback to snapshot data
+                    if headline := snapshot.get("title", ""):
+                        headlines.append(headline)
+                    if body := snapshot.get("body", {}).get("text", "") if isinstance(snapshot.get("body"), dict) else str(snapshot.get("body", "")):
+                        bodies.append(body)
+                    if url := snapshot.get("linkUrl", ""):
+                        landing_pages.append(url)
+                
+                # Track platforms and activity
+                platforms_used.update(ad.get("publisherPlatform", []))
+                if ad.get("isActive"):
+                    active_ads += 1
+                    
+            else:  # Legacy format (Adyntel or other)
                 snapshot = ad.get("snapshot", {})
                 if headline := snapshot.get("linkTitle") or snapshot.get("title"):
                     headlines.append(headline)
@@ -264,6 +398,7 @@ Keep analysis concise and actionable - max 300 words."""
                     bodies.append(body)
                 if url := snapshot.get("linkUrl"):
                     landing_pages.append(url)
+                platforms_used.add("FACEBOOK")
         
         # Extract themes from ad text
         all_text = " ".join(headlines + bodies).lower()
@@ -274,28 +409,53 @@ Keep analysis concise and actionable - max 300 words."""
             "health": any(word in all_text for word in ["health", "wellness", "nutrition", "vitamin"])
         }
         
-        analysis = f"""# {brand_name} Competitive Analysis (Real Data)
+        # Get dominant media type and platform insights
+        dominant_media = max(media_types, key=media_types.get) if any(media_types.values()) else "unknown"
+        dominant_cta = max(set(cta_types), key=cta_types.count) if cta_types else "No CTA"
+        platform_list = list(platforms_used) if platforms_used else ["Unknown"]
+        
+        analysis = f"""# {brand_name} Competitive Intelligence Analysis
 
-## 📊 Collection Summary
-- **{len(ads)} active ads** collected
-- **{len(headlines)} headlines** analyzed
+## 📊 Campaign Overview
+- **{len(ads)} active ads** collected from {brand_name}
+- **{active_ads}/{len(ads)} currently active** ({int(active_ads/len(ads)*100) if ads else 0}% active rate)
+- **{len(headlines)} unique headlines** analyzed
 - **{len(landing_pages)} landing pages** identified
+- **Platforms**: {', '.join(platform_list)}
 
-## 🎯 Top Headlines
-{chr(10).join(f"• \"{h}\"" for h in headlines[:3])}
+## 🎯 Top Messaging Hooks (From Live Ads)
+{chr(10).join(f"• \"{h[:80]}{'...' if len(h) > 80 else ''}\"" for h in headlines[:5])}
 
-## 📈 Messaging Themes
-- **Scientific Authority**: {"✅ Strong focus" if themes["science"] else "⚠️ Limited claims"}
-- **Convenience**: {"✅ Simplicity messaging" if themes["convenience"] else "⚠️ Complex positioning"}
-- **Energy/Performance**: {"✅ Performance focus" if themes["energy"] else "⚠️ Limited energy claims"}
-- **Health Focus**: {"✅ Wellness-centered" if themes["health"] else "⚠️ Non-health positioning"}
+## 🎨 Creative Strategy Intelligence  
+- **Media Format Distribution**: {media_types['image']} images, {media_types['video']} videos, {media_types['text_only']} text-only
+- **Dominant Format**: {dominant_media.title()} ({max(media_types.values()) if media_types.values() else 0} ads)
+- **Primary CTA**: "{dominant_cta}"
+- **CTA Variety**: {len(set(cta_types))} different CTAs tested
 
-## 💡 Tactical Recommendations
-1. **Test Top Performers**: A/B test variations of their best headlines
-2. **Landing Page Review**: Analyze {len(landing_pages)} destination pages for conversion elements
-3. **Competitive Positioning**: Position against their key messaging themes
+## 📈 Messaging Theme Analysis
+- **Scientific Authority**: {"✅ Heavy clinical validation focus" if themes['science'] else "⚠️ Limited scientific claims"}
+- **Convenience Positioning**: {"✅ Simplicity messaging dominates" if themes['convenience'] else "⚠️ Complex positioning approach"}
+- **Energy/Performance**: {"✅ Performance benefits highlighted" if themes['energy'] else "⚠️ Limited energy claims"}
+- **Health Focus**: {"✅ Wellness-centered messaging" if themes['health'] else "⚠️ Non-health positioning"}
 
-**Analysis of {len(ads)} live {brand_name} ads - {datetime.now().strftime("%Y-%m-%d")}**"""
+## 🎯 Strategic Opportunities 
+1. **Creative Format Gap**: {f"They're underutilizing {min(media_types, key=media_types.get)} format" if any(media_types.values()) else "Mixed format strategy"}
+2. **Platform Expansion**: {f"Missing opportunities on {len(['INSTAGRAM', 'AUDIENCE_NETWORK', 'MESSENGER', 'THREADS']) - len(platforms_used)} platforms" if len(platforms_used) < 4 else "Full platform coverage"}
+3. **CTA Optimization**: Test alternatives to their dominant "{dominant_cta}" CTA
+4. **Landing Page Testing**: {len(landing_pages)} pages suggests {"extensive" if len(landing_pages) > 3 else "limited"} funnel testing
+
+## 💡 Immediate Counter-Tactics
+- **Creative Differentiation**: Focus on {min(media_types, key=media_types.get) if any(media_types.values()) else "video"} ads to differentiate
+- **Platform Strategy**: {"Expand beyond their limited platform mix" if len(platforms_used) < 3 else "Match their cross-platform approach"}
+- **CTA Testing**: A/B test alternative CTAs vs their "{dominant_cta}"
+- **Messaging Angle**: Exploit gaps in their {min(themes, key=lambda x: themes[x]) if themes else "messaging"} positioning
+
+## 📊 Campaign Velocity Analysis
+- **Total Ad Volume**: {len(ads)} suggests {"aggressive" if len(ads) > 10 else "moderate" if len(ads) > 5 else "conservative"} spending
+- **Active Ratio**: {int(active_ads/len(ads)*100) if ads else 0}% indicates {"high velocity testing" if ads and active_ads/len(ads) > 0.7 else "selective ad rotation"}
+- **Creative Diversity**: {len(headlines)} variations shows {"extensive creative testing" if len(headlines) > 8 else "focused messaging approach"}
+
+**Live competitive intelligence from {len(ads)} real {brand_name} ads • {datetime.now().strftime("%Y-%m-%d %H:%M")}**"""
         
         return analysis
     
