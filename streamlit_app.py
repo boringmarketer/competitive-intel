@@ -166,12 +166,12 @@ def show_dashboard(config):
     else:
         api_status.append("❌ Apify API token missing")
     
-    if config["claude"]["api_key"]:
+    if config.get("claude", {}).get("api_key"):
         api_status.append("✅ Claude API configured")
     else:
         api_status.append("❌ Claude API key missing")
     
-    if config["notifications"]["webhook_url"]:
+    if config.get("notifications", {}).get("webhook_url"):
         api_status.append("✅ Webhook configured")
     else:
         api_status.append("⚠️ Webhook not configured (optional)")
@@ -296,7 +296,7 @@ def show_settings(config):
         st.markdown("**Claude API**")
         claude_key = st.text_input(
             "API Key",
-            value=config["claude"]["api_key"],
+            value=config.get("claude", {}).get("api_key", ""),
             type="password",
             help="Your Anthropic Claude API key"
         )
@@ -311,7 +311,7 @@ def show_settings(config):
             "Lookback Days",
             min_value=1,
             max_value=90,
-            value=config["analysis"]["lookback_days"],
+            value=config.get("analysis", {}).get("lookback_days", 7),
             help="How many days back to search for new ads"
         )
     
@@ -320,7 +320,7 @@ def show_settings(config):
             "Max Ads per Brand",
             min_value=1,
             max_value=50,
-            value=config["analysis"]["max_ads_per_brand"],
+            value=config.get("analysis", {}).get("max_ads_per_brand", 10),
             help="Maximum number of ads to analyze per brand"
         )
     
@@ -332,19 +332,29 @@ def show_settings(config):
     with col1:
         webhook_url = st.text_input(
             "Webhook URL",
-            value=config["notifications"]["webhook_url"],
+            value=config.get("notifications", {}).get("webhook_url", ""),
             help="Pipedream webhook URL for Slack notifications"
         )
     
     with col2:
         notifications_enabled = st.checkbox(
             "Enable Notifications",
-            value=config["notifications"]["enabled"],
+            value=config.get("notifications", {}).get("enabled", True),
             help="Send reports via webhook"
         )
     
     # Save settings
     if st.button("💾 Save Settings"):
+        # Ensure config structure exists
+        if "apify" not in config:
+            config["apify"] = {}
+        if "claude" not in config:
+            config["claude"] = {}
+        if "analysis" not in config:
+            config["analysis"] = {}
+        if "notifications" not in config:
+            config["notifications"] = {}
+            
         config["apify"]["api_token"] = apify_token
         config["claude"]["api_key"] = claude_key
         config["analysis"]["lookback_days"] = lookback_days
