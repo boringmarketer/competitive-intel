@@ -8,6 +8,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 import pandas as pd
 from typing import Dict, Any
+from pipedream_integration import PipedreamIntegration, get_oauth_instructions
 
 # Page config
 st.set_page_config(
@@ -831,119 +832,209 @@ def show_step4_automation_setup(config):
         st.success(f"✅ **Your last analysis**: {brands_analyzed} brands, {total_ads} ads analyzed")
     
     # Automation configuration
-    tab1, tab2, tab3 = st.tabs(["🔗 Webhook Setup", "⏰ Schedule Settings", "📋 Summary"])
+    tab1, tab2, tab3 = st.tabs(["🔗 Service Connection", "⏰ Schedule Settings", "📋 Summary"])
     
     with tab1:
-        st.markdown("### 🔗 Webhook Configuration")
+        st.markdown("### 🔗 Connect Your Services")
         st.markdown("""
-        Connect your analysis to external tools like Slack, Discord, Teams, or custom applications.
-        We'll show you how to set up a **Pipedream workflow** that can send results anywhere.
+        Connect directly to your favorite services with **one-click OAuth authentication**.
+        We'll automatically create and deploy a Pipedream workflow for you!
         """)
         
-        # Webhook URL input
-        webhook_url = st.text_input(
-            "Webhook URL",
-            value=st.session_state.get('automation_webhook', ''),
-            placeholder="https://your-pipedream-workflow.m.pipedream.net",
-            help="We'll show you how to create this in Pipedream below"
-        )
+        # Initialize Pipedream integration
+        pd_integration = PipedreamIntegration()
         
-        if webhook_url:
-            st.session_state.automation_webhook = webhook_url
-            st.success("✅ Webhook URL saved for this session")
+        # Pipedream API token input
+        st.markdown("#### 🔑 Pipedream Setup")
+        col1, col2 = st.columns([3, 1])
         
-        # Test webhook
-        if webhook_url:
-            col1, col2 = st.columns(2)
-            with col1:
-                if st.button("🧪 Test Webhook"):
-                    with st.spinner("Testing webhook..."):
-                        try:
-                            import requests
-                            test_payload = {
-                                "test": True,
-                                "message": "Test from Competitive Intelligence Tool",
-                                "timestamp": datetime.now().isoformat(),
-                                "source": "competitive-intel-tool"
-                            }
-                            
-                            response = requests.post(webhook_url, json=test_payload, timeout=10)
-                            if response.status_code == 200:
-                                st.success("✅ Webhook test successful!")
-                            else:
-                                st.error(f"❌ Webhook test failed: {response.status_code}")
-                        except Exception as e:
-                            st.error(f"❌ Webhook test error: {str(e)}")
+        with col1:
+            pipedream_token = st.text_input(
+                "Pipedream API Token",
+                value=st.session_state.get('pipedream_token', ''),
+                type="password",
+                placeholder="pd_***",
+                help="Get your token from pipedream.com/settings/account"
+            )
             
-            with col2:
-                notification_format = st.selectbox(
-                    "Notification Format",
-                    ["Slack", "Discord", "Teams", "Custom JSON"],
-                    help="Choose how you want the data formatted"
-                )
+        with col2:
+            st.markdown("[Get Token →](https://pipedream.com/settings/account)")
         
-        # Pipedream setup guide
+        if pipedream_token:
+            st.session_state.pipedream_token = pipedream_token
+            pd_integration.api_token = pipedream_token
+            st.success("✅ Pipedream API token set")
+        
+        # Service selection
         st.markdown("---")
-        st.markdown("### 🔧 How to Setup Pipedream Webhook")
+        st.markdown("#### 📱 Choose Your Notification Service")
         
-        with st.expander("📖 Step-by-Step Pipedream Setup Guide"):
-            st.markdown("""
-            **1. Create Pipedream Account**
-            - Go to [pipedream.com](https://pipedream.com) and sign up (free)
-            
-            **2. Create New Workflow**
-            - Click "New Workflow"
-            - Choose "HTTP Request" as trigger
-            - Copy the webhook URL it gives you (paste above)
-            
-            **3. Add Slack Step** (or your preferred destination)
-            - Click "+" to add step
-            - Search for "Slack" 
-            - Choose "Send Message to Channel"
-            - Connect your Slack workspace
-            - Choose channel (e.g., #competitive-intel)
-            
-            **4. Configure Message Format**
-            ```javascript
-            // In the message field, use:
-            `New Competitive Analysis Report 📊
-            
-            **Brands Analyzed**: {{steps.trigger.event.body.brands_count}}
-            **Total Ads Found**: {{steps.trigger.event.body.total_ads}}
-            **Analysis Date**: {{steps.trigger.event.body.timestamp}}
-            
-            **Key Insights**:
-            {{steps.trigger.event.body.summary}}
-            
-            [Download Full Report]({{steps.trigger.event.body.report_url}})
-            `
-            ```
-            
-            **5. Save & Test**
-            - Save the workflow
-            - Use the "Test Webhook" button above
-            - Check your Slack channel for the test message
-            """)
+        services = pd_integration.get_available_services()
         
-        # Sample payload
-        with st.expander("📋 Sample Webhook Payload"):
-            sample_payload = {
-                "report": "# Competitive Analysis Report...",
-                "timestamp": "2024-01-15T10:30:00Z",
-                "source": "competitive-intel-tool",
-                "brands_count": 2,
-                "total_ads": 15,
-                "summary": "AG1 is running 67% video ads with energy themes, while competitor focuses on convenience messaging",
-                "insights": {
-                    "AG1": {
-                        "total_ads": 10,
-                        "active_ads": 8,
-                        "dominant_media": "video",
-                        "main_themes": ["energy", "science"]
-                    }
-                }
-            }
-            st.json(sample_payload)
+        # Display services in a grid
+        cols = st.columns(3)
+        selected_service = None
+        
+        for i, service in enumerate(services[:6]):  # Show first 6 services
+            with cols[i % 3]:
+                if st.button(
+                    f"{service['icon']} {service['name']}", 
+                    help=service['description'],
+                    use_container_width=True,
+                    key=f"service_{service['id']}"
+                ):
+                    selected_service = service['id']
+                    st.session_state.selected_service = service['id']
+                    st.session_state.selected_service_name = service['name']
+        
+        # Show selected service configuration
+        if 'selected_service' in st.session_state:
+            selected_service = st.session_state.selected_service
+            service_name = st.session_state.selected_service_name
+            
+            st.markdown(f"---")
+            st.markdown(f"### ⚙️ Configure {service_name}")
+            
+            if selected_service == "slack":
+                st.markdown("#### 🔗 Slack OAuth Connection")
+                
+                col1, col2 = st.columns(2)
+                with col1:
+                    slack_channel = st.text_input("Slack Channel", value="#competitive-intel", placeholder="#channel-name")
+                    
+                with col2:
+                    if st.button("🔗 Connect to Slack", type="primary", use_container_width=True):
+                        # Generate OAuth URL
+                        oauth_url = pd_integration.create_oauth_url("slack", st.session_state.get('redirect_uri', ''))
+                        st.session_state.slack_channel = slack_channel
+                        st.markdown(f"**[🔗 Click here to connect Slack →]({oauth_url})**")
+                        st.info("After connecting, return here to complete setup.")
+                
+                # OAuth instructions
+                with st.expander("📖 Slack Setup Instructions"):
+                    st.markdown(get_oauth_instructions("slack"))
+                    
+            elif selected_service == "discord":
+                st.markdown("#### 🎮 Discord Bot Connection")
+                
+                col1, col2 = st.columns(2)
+                with col1:
+                    discord_channel = st.text_input("Discord Channel", value="competitive-intel", placeholder="channel-name")
+                    discord_token = st.text_input("Discord Bot Token", type="password", placeholder="Bot token")
+                    
+                with col2:
+                    if st.button("🔗 Connect to Discord", type="primary", use_container_width=True):
+                        if discord_token:
+                            st.session_state.discord_channel = discord_channel
+                            st.session_state.discord_token = discord_token
+                            st.success("✅ Discord configuration saved!")
+                        else:
+                            st.error("Please provide Discord bot token")
+                
+                with st.expander("📖 Discord Setup Instructions"):
+                    st.markdown(get_oauth_instructions("discord"))
+                    
+            elif selected_service == "teams":
+                st.markdown("#### 🏢 Microsoft Teams Connection")
+                
+                col1, col2 = st.columns(2)
+                with col1:
+                    teams_channel = st.text_input("Teams Channel", value="Competitive Intelligence", placeholder="Channel name")
+                    
+                with col2:
+                    if st.button("🔗 Connect to Teams", type="primary", use_container_width=True):
+                        oauth_url = pd_integration.create_oauth_url("teams", st.session_state.get('redirect_uri', ''))
+                        st.session_state.teams_channel = teams_channel
+                        st.markdown(f"**[🔗 Click here to connect Teams →]({oauth_url})**")
+                        st.info("After connecting, return here to complete setup.")
+                
+                with st.expander("📖 Teams Setup Instructions"):
+                    st.markdown(get_oauth_instructions("teams"))
+                    
+            elif selected_service == "email":
+                st.markdown("#### 📧 Email Configuration")
+                
+                col1, col2 = st.columns(2)
+                with col1:
+                    email_recipients = st.text_area(
+                        "Email Recipients", 
+                        placeholder="user1@company.com, user2@company.com",
+                        help="Enter email addresses separated by commas"
+                    )
+                    
+                with col2:
+                    email_subject = st.text_input(
+                        "Email Subject", 
+                        value="Competitive Intelligence Report",
+                        placeholder="Subject line"
+                    )
+                    
+                if st.button("📧 Configure Email", type="primary", use_container_width=True):
+                    if email_recipients:
+                        emails = [email.strip() for email in email_recipients.split(",")]
+                        st.session_state.email_recipients = emails
+                        st.session_state.email_subject = email_subject
+                        st.success(f"✅ Email configured for {len(emails)} recipients")
+                    else:
+                        st.error("Please provide at least one email recipient")
+                        
+            elif selected_service == "webhook":
+                st.markdown("#### 🔗 Custom Webhook")
+                
+                webhook_url = st.text_input(
+                    "Webhook URL",
+                    placeholder="https://your-webhook-endpoint.com/receive",
+                    help="Any HTTP endpoint that can receive JSON POST requests"
+                )
+                
+                col1, col2 = st.columns(2)
+                with col1:
+                    if st.button("🧪 Test Webhook", use_container_width=True):
+                        if webhook_url:
+                            with st.spinner("Testing webhook..."):
+                                try:
+                                    test_payload = {
+                                        "test": True,
+                                        "message": "Test from Competitive Intelligence Tool",
+                                        "timestamp": datetime.now().isoformat()
+                                    }
+                                    response = requests.post(webhook_url, json=test_payload, timeout=10)
+                                    if response.status_code == 200:
+                                        st.success("✅ Webhook test successful!")
+                                    else:
+                                        st.error(f"❌ Test failed: {response.status_code}")
+                                except Exception as e:
+                                    st.error(f"❌ Test error: {str(e)}")
+                        else:
+                            st.error("Please enter webhook URL")
+                            
+                with col2:
+                    if st.button("💾 Save Webhook", type="primary", use_container_width=True):
+                        if webhook_url:
+                            st.session_state.webhook_url = webhook_url
+                            st.success("✅ Webhook URL saved!")
+                        else:
+                            st.error("Please enter webhook URL")
+        
+        # Show connection status
+        if 'selected_service' in st.session_state:
+            st.markdown("---")
+            st.markdown("### ✅ Connection Status")
+            
+            service = st.session_state.selected_service
+            
+            if service == "slack" and 'slack_channel' in st.session_state:
+                st.success(f"✅ Slack configured for {st.session_state.slack_channel}")
+            elif service == "discord" and 'discord_token' in st.session_state:
+                st.success(f"✅ Discord configured for #{st.session_state.discord_channel}")
+            elif service == "teams" and 'teams_channel' in st.session_state:
+                st.success(f"✅ Teams configured for {st.session_state.teams_channel}")
+            elif service == "email" and 'email_recipients' in st.session_state:
+                st.success(f"✅ Email configured for {len(st.session_state.email_recipients)} recipients")
+            elif service == "webhook" and 'webhook_url' in st.session_state:
+                st.success(f"✅ Webhook configured: {st.session_state.webhook_url[:50]}...")
+            else:
+                st.warning(f"⚠️ {st.session_state.selected_service_name} connection incomplete")
     
     with tab2:
         st.markdown("### ⏰ Automation Schedule")
@@ -1036,27 +1127,139 @@ def show_step4_automation_setup(config):
         else:
             st.info("Configure automation settings in the Schedule tab above")
         
-        # Export configuration
+        # Workflow Creation
         st.markdown("---")
-        st.markdown("### 📤 Export Configuration")
+        st.markdown("### 🚀 Create Pipedream Workflow")
         
+        if 'automation_config' in st.session_state and 'selected_service' in st.session_state:
+            config = st.session_state.automation_config
+            
+            # Check if all requirements are met
+            has_pipedream_token = 'pipedream_token' in st.session_state and st.session_state.pipedream_token
+            has_service_config = False
+            
+            service = st.session_state.selected_service
+            if service == "slack" and 'slack_channel' in st.session_state:
+                has_service_config = True
+            elif service == "discord" and 'discord_token' in st.session_state:
+                has_service_config = True
+            elif service == "email" and 'email_recipients' in st.session_state:
+                has_service_config = True
+            elif service == "webhook" and 'webhook_url' in st.session_state:
+                has_service_config = True
+            
+            if has_pipedream_token and has_service_config:
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    if st.button("🚀 Create Automated Workflow", type="primary", use_container_width=True):
+                        with st.spinner("Creating Pipedream workflow..."):
+                            try:
+                                # Initialize Pipedream integration
+                                pd_integration = PipedreamIntegration(st.session_state.pipedream_token)
+                                
+                                # Prepare workflow configuration
+                                workflow_config = {
+                                    "service": service,
+                                    "schedule": config.get('schedule_type', 'daily'),
+                                    "brands": config.get('brands', []),
+                                    "lookback_days": config.get('lookback_days', 7),
+                                    "max_ads": config.get('max_ads', 10),
+                                    "apify_key": st.session_state.get('temp_apify_key', ''),
+                                    "claude_key": st.session_state.get('temp_claude_key', ''),
+                                    "analysis_endpoint": f"{st.session_state.get('app_url', 'https://your-app.streamlit.app')}/api/analyze"
+                                }
+                                
+                                # Add service-specific config
+                                if service == "slack":
+                                    workflow_config["slack_channel"] = st.session_state.get('slack_channel', '#competitive-intel')
+                                elif service == "discord":
+                                    workflow_config["discord_channel"] = st.session_state.get('discord_channel', 'competitive-intel')
+                                    workflow_config["discord_token"] = st.session_state.get('discord_token', '')
+                                elif service == "email":
+                                    workflow_config["email_recipients"] = st.session_state.get('email_recipients', [])
+                                    workflow_config["email_subject"] = st.session_state.get('email_subject', 'Competitive Intelligence Report')
+                                elif service == "webhook":
+                                    workflow_config["webhook_url"] = st.session_state.get('webhook_url', '')
+                                
+                                # Create workflow template
+                                template = pd_integration.create_workflow_template(workflow_config)
+                                
+                                # Create the workflow
+                                success, message, workflow_data = pd_integration.create_workflow(template)
+                                
+                                if success:
+                                    st.success("✅ Workflow created successfully!")
+                                    st.session_state.workflow_id = workflow_data.get('id', '')
+                                    st.session_state.workflow_url = workflow_data.get('url', '')
+                                    
+                                    # Show workflow details
+                                    st.markdown("**Workflow Details:**")
+                                    st.write(f"• **Workflow ID**: {workflow_data.get('id', 'N/A')}")
+                                    st.write(f"• **Status**: {workflow_data.get('status', 'N/A')}")
+                                    
+                                    if workflow_data.get('url'):
+                                        st.markdown(f"**[🔗 View Workflow in Pipedream →]({workflow_data['url']})**")
+                                else:
+                                    st.error(f"❌ Failed to create workflow: {message}")
+                                    
+                            except Exception as e:
+                                st.error(f"❌ Error creating workflow: {str(e)}")
+                
+                with col2:
+                    # Download configuration
+                    config_json = json.dumps({
+                        **st.session_state.automation_config,
+                        "service_config": {
+                            "service": service,
+                            "pipedream_token": "***HIDDEN***",
+                            **{k: v for k, v in st.session_state.items() if k.startswith(f"{service}_")}
+                        }
+                    }, indent=2, default=str)
+                    
+                    st.download_button(
+                        "📥 Download Config",
+                        data=config_json,
+                        file_name=f"competitive_intel_automation_{datetime.now().strftime('%Y%m%d')}.json",
+                        mime="application/json",
+                        use_container_width=True
+                    )
+            else:
+                st.warning("⚠️ Complete Pipedream token and service configuration to create workflow")
+        
+        # Manual workflow option
         if 'automation_config' in st.session_state:
-            config_json = json.dumps(st.session_state.automation_config, indent=2, default=str)
+            st.markdown("---")
+            st.markdown("### 📝 Manual Workflow Setup")
+            st.markdown("Prefer to set up the workflow manually? Download the template:")
             
-            col1, col2 = st.columns(2)
-            with col1:
+            if st.button("📋 Generate Workflow Template"):
+                pd_integration = PipedreamIntegration()
+                config = st.session_state.automation_config
+                
+                workflow_config = {
+                    "service": st.session_state.get('selected_service', 'slack'),
+                    "schedule": config.get('schedule_type', 'daily'),
+                    "brands": config.get('brands', []),
+                    "lookback_days": config.get('lookback_days', 7),
+                    "max_ads": config.get('max_ads', 10)
+                }
+                
+                template = pd_integration.create_workflow_template(workflow_config)
+                template_json = json.dumps(template, indent=2)
+                
                 st.download_button(
-                    "📥 Download Config",
-                    data=config_json,
-                    file_name=f"competitive_intel_config_{datetime.now().strftime('%Y%m%d')}.json",
-                    mime="application/json",
-                    use_container_width=True
+                    "📥 Download Workflow Template",
+                    data=template_json,
+                    file_name=f"pipedream_workflow_template_{datetime.now().strftime('%Y%m%d')}.json",
+                    mime="application/json"
                 )
-            
-            with col2:
-                if st.button("🔄 Run Analysis Now", type="primary", use_container_width=True):
-                    # Redirect to Step 3 with current config
-                    st.rerun()
+                
+                st.markdown("**Import this template into Pipedream:**")
+                st.markdown("1. Go to [pipedream.com/workflows](https://pipedream.com/workflows)")
+                st.markdown("2. Click 'Import' and upload the downloaded template")
+                st.markdown("3. Configure your OAuth connections")
+                st.markdown("4. Deploy the workflow")
         
         # Next steps
         st.markdown("---")
