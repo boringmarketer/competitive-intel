@@ -339,7 +339,6 @@ def main():
         "🏠 Dashboard", 
         "🔑 Quick Setup (Your API Keys)",
         "🎯 Brand Management", 
-        "⚙️ Settings", 
         "📊 Run Analysis",
         "📈 Visual Insights",
         "📄 View Reports"
@@ -351,8 +350,6 @@ def main():
         show_quick_setup()
     elif page == "🎯 Brand Management":
         show_brand_management(config)
-    elif page == "⚙️ Settings":
-        show_settings(config)
     elif page == "📊 Run Analysis":
         show_run_analysis(config)
     elif page == "📈 Visual Insights":
@@ -464,7 +461,11 @@ def show_quick_setup():
 
 def show_dashboard(config):
     """Dashboard overview"""
-    st.markdown('<h2 class="section-header">Dashboard Overview</h2>', unsafe_allow_html=True)
+    st.markdown('<h2 class="section-header">🎯 Competitive Intelligence Tool</h2>', unsafe_allow_html=True)
+    
+    # Multi-user info
+    if is_using_secrets():
+        st.info("👥 **Multi-User Mode**: This is a shared tool. Use '🔑 Quick Setup' to enter your own API keys and analyze any brands you want!")
     
     # Quick stats
     col1, col2, col3, col4 = st.columns(4)
@@ -489,30 +490,31 @@ def show_dashboard(config):
     # Configuration status
     st.markdown('<h3 class="section-header">🔧 Configuration Status</h3>', unsafe_allow_html=True)
     
-    # Check API keys
-    api_status = []
-    if config.get("apify", {}).get("api_token"):
-        api_status.append("✅ Apify API configured")
+    # Check session vs default config
+    has_session_keys = ('temp_apify_key' in st.session_state and st.session_state.temp_apify_key) or \
+                      ('temp_claude_key' in st.session_state and st.session_state.temp_claude_key)
+    
+    if has_session_keys:
+        st.success("🔑 **Using your personal API keys** (session-based)")
+        if 'temp_apify_key' in st.session_state and st.session_state.temp_apify_key:
+            st.write("✅ Your Apify API configured")
+        if 'temp_claude_key' in st.session_state and st.session_state.temp_claude_key:
+            st.write("✅ Your Claude API configured")
     else:
-        api_status.append("❌ Apify API token missing")
+        st.warning("⚠️ **No personal API keys set** - You'll need your own keys to run analysis")
+        st.markdown("Go to '🔑 Quick Setup' to enter your API keys")
     
-    if config.get("claude", {}).get("api_key"):
-        api_status.append("✅ Claude API configured")
-    else:
-        api_status.append("❌ Claude API key missing")
+    # Show session brands if any
+    if 'quick_brands' in st.session_state and st.session_state.quick_brands:
+        st.markdown("### 🎯 Your Session Brands")
+        for brand_name in st.session_state.quick_brands:
+            st.write(f"• {brand_name}")
     
-    if config.get("notifications", {}).get("webhook_url"):
-        api_status.append("✅ Webhook configured")
-    else:
-        api_status.append("⚠️ Webhook not configured (optional)")
+    # Default brands summary
+    st.markdown('<h3 class="section-header">📋 Example Brands (Available for Analysis)</h3>', unsafe_allow_html=True)
+    st.markdown("*These are pre-configured brands that anyone can analyze with their own API keys*")
     
-    for status in api_status:
-        st.write(status)
-    
-    # Active brands summary
-    st.markdown('<h3 class="section-header">🎯 Active Brands</h3>', unsafe_allow_html=True)
-    
-    for brand_name, brand_config in config["brands"].items():
+    for brand_name, brand_config in config.get("brands", {}).items():
         if brand_config.get("active", True):
             col1, col2, col3 = st.columns([2, 2, 1])
             with col1:
@@ -520,7 +522,7 @@ def show_dashboard(config):
             with col2:
                 st.write(f"Domain: {brand_config.get('domain', 'N/A')}")
             with col3:
-                st.write("🟢 Active")
+                st.write("🟢 Available")
 
 def show_brand_management(config):
     """Brand management interface"""
