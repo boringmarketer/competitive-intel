@@ -14,8 +14,12 @@ import argparse
 
 
 class CompetitiveIntel:
-    def __init__(self, config_path: str = "config.json"):
-        self.config = self.load_config(config_path)
+    def __init__(self, config_path: str = None):
+        if config_path:
+            self.config = self.load_config(config_path)
+        else:
+            # Will be set externally (e.g., from Streamlit)
+            self.config = None
         self.session = requests.Session()
     
     def load_config(self, path: str) -> Dict:

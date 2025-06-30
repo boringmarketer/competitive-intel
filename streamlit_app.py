@@ -56,7 +56,11 @@ def load_config():
     """Load configuration from file or Streamlit secrets"""
     # Try Streamlit secrets first (for cloud deployment)
     if hasattr(st, 'secrets') and 'config' in st.secrets:
-        return dict(st.secrets.config)
+        # Convert secrets to a regular dict to avoid read-only issues
+        config = {}
+        for key in st.secrets.config:
+            config[key] = dict(st.secrets.config[key])
+        return config
     
     # Fall back to local config file
     try:
@@ -199,6 +203,20 @@ def show_dashboard(config):
 def show_brand_management(config):
     """Brand management interface"""
     st.markdown('<h2 class="section-header">🎯 Brand Management</h2>', unsafe_allow_html=True)
+    
+    # Disable brand management on Streamlit Cloud to avoid config modification errors
+    if is_using_secrets():
+        st.info("🔒 **Brand management is disabled on Streamlit Cloud**")
+        st.markdown("Brands are configured in your secrets.toml file. To add/edit brands:")
+        st.code("""[config.brands.YourBrand]
+facebook_id = "123456789"
+domain = "yourbrand.com"
+active = true""")
+        st.markdown("Current brands from secrets:")
+        for brand_name, brand_config in config.get("brands", {}).items():
+            status = "🟢 Active" if brand_config.get("active") else "🔴 Inactive"
+            st.write(f"**{brand_name}** - {status}")
+        return
     
     # Add new brand
     st.markdown("### Add New Brand")
@@ -455,8 +473,14 @@ def show_run_analysis(config):
             
             with st.spinner("Running competitive intelligence analysis..."):
                 try:
-                    # Initialize tool
-                    intel = CompetitiveIntel("config.json")
+                    # Initialize tool with current config
+                    if is_using_secrets():
+                        # For Streamlit Cloud, pass config directly
+                        intel = CompetitiveIntel()
+                        intel.config = config
+                    else:
+                        # For local deployment, use config file
+                        intel = CompetitiveIntel("config.json")
                     
                     # Override notification setting if disabled (create new config)
                     if not include_notifications:
