@@ -1512,6 +1512,45 @@ def show_step5_automation_setup(config):
                                     
                                     if workflow_data.get('url'):
                                         st.markdown(f"**[🔗 View Workflow in Pipedream →]({workflow_data['url']})**")
+                                    
+                                    # Critical setup instructions
+                                    st.markdown("---")
+                                    st.warning("""
+                                    ⚠️ **IMPORTANT: Final Setup Required**
+                                    
+                                    Your workflow has been created, but you need to add your API keys to Pipedream for automation to work:
+                                    
+                                    **Step 1**: Click the workflow link above to open it in Pipedream
+                                    **Step 2**: Go to the "Environment" tab in your workflow  
+                                    **Step 3**: Add these environment variables:
+                                    
+                                    • `APIFY_API_TOKEN` = Your Apify API token
+                                    • `CLAUDE_API_KEY` = Your Claude API key
+                                    
+                                    **Step 4**: Save and deploy your workflow
+                                    
+                                    ✅ Once complete, you'll receive automated competitive intelligence reports!
+                                    """)
+                                    
+                                    st.info(f"""
+                                    💡 **Why this step is needed:**
+                                    Your API keys are only stored in this browser session for security. 
+                                    To enable true automation, Pipedream needs its own copy of your keys stored securely in their environment.
+                                    """)
+                                    
+                                    # Quick reference
+                                    with st.expander("📋 Quick Reference - Your API Keys"):
+                                        st.markdown(f"""
+                                        **Copy these values to Pipedream:**
+                                        
+                                        **APIFY_API_TOKEN**:  
+                                        `{st.session_state.get('temp_apify_key', 'Not found')[:20]}...`
+                                        
+                                        **CLAUDE_API_KEY**:  
+                                        `{st.session_state.get('temp_claude_key', 'Not found')[:20]}...`
+                                        
+                                        *Note: Copy the full keys from Step 1 if you need them again*
+                                        """)
                                 else:
                                     st.error(f"❌ Failed to create workflow: {message}")
                                     
@@ -1576,6 +1615,18 @@ def show_step5_automation_setup(config):
         # Next steps
         st.markdown("---")
         st.markdown("### 🎉 You're All Set!")
+        
+        if 'workflow_url' in st.session_state and st.session_state.workflow_url:
+            st.success("""
+            ✅ **Automation Configured Successfully!**
+            
+            Your Pipedream workflow is created and ready. Don't forget to:
+            1. Add your API keys to Pipedream environment variables
+            2. Deploy the workflow to start receiving automated reports
+            """)
+            
+            st.markdown(f"**[🚀 Complete Setup in Pipedream →]({st.session_state.workflow_url})**")
+        
         st.markdown("""
         **What you've accomplished:**
         ✅ Set up API keys for data collection  
@@ -1585,10 +1636,10 @@ def show_step5_automation_setup(config):
         ✅ Configured automation and webhooks  
         
         **Next steps:**
-        - **Set up the Pipedream workflow** for automated delivery
-        - **Run regular analysis** to stay ahead of competitors
-        - **Monitor your competitors** with automated reports
-        - **Scale your competitive intelligence** across more brands
+        - **Complete Pipedream setup** to enable automated delivery
+        - **Receive regular competitive intelligence** without manual work  
+        - **Stay ahead of competitors** with weekly insights
+        - **Scale monitoring** across more brands and markets
         """)
         
         # Action buttons
