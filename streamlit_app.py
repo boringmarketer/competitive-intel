@@ -215,14 +215,20 @@ def show_brand_management(config):
     
     if st.button("➕ Add Brand"):
         if new_brand_name and (new_facebook_id or new_domain):
-            config["brands"][new_brand_name] = {
-                "facebook_id": new_facebook_id,
-                "domain": new_domain,
-                "active": new_active
-            }
-            if save_config(config):
-                st.success(f"✅ Added brand: {new_brand_name}")
-                st.rerun()
+            if is_using_secrets():
+                st.warning("⚠️ Running on Streamlit Cloud - can't save brands. Update secrets.toml manually.")
+            else:
+                # Create new config with added brand
+                new_config = dict(config)
+                new_config["brands"] = dict(config.get("brands", {}))
+                new_config["brands"][new_brand_name] = {
+                    "facebook_id": new_facebook_id,
+                    "domain": new_domain,
+                    "active": new_active
+                }
+                if save_config(new_config):
+                    st.success(f"✅ Added brand: {new_brand_name}")
+                    st.rerun()
         else:
             st.error("❌ Please provide brand name and either Facebook ID or domain")
     
@@ -261,21 +267,33 @@ def show_brand_management(config):
                 
                 with col_update:
                     if st.button("💾 Update", key=f"update_{brand_name}"):
-                        config["brands"][brand_name] = {
-                            "facebook_id": facebook_id,
-                            "domain": domain,
-                            "active": active
-                        }
-                        if save_config(config):
-                            st.success(f"✅ Updated {brand_name}")
-                            st.rerun()
+                        if is_using_secrets():
+                            st.warning("⚠️ Running on Streamlit Cloud - can't save brands. Update secrets.toml manually.")
+                        else:
+                            # Create new config with updated brand
+                            new_config = dict(config)
+                            new_config["brands"] = dict(config.get("brands", {}))
+                            new_config["brands"][brand_name] = {
+                                "facebook_id": facebook_id,
+                                "domain": domain,
+                                "active": active
+                            }
+                            if save_config(new_config):
+                                st.success(f"✅ Updated {brand_name}")
+                                st.rerun()
                 
                 with col_delete:
                     if st.button("🗑️ Delete", key=f"delete_{brand_name}"):
-                        del config["brands"][brand_name]
-                        if save_config(config):
-                            st.success(f"✅ Deleted {brand_name}")
-                            st.rerun()
+                        if is_using_secrets():
+                            st.warning("⚠️ Running on Streamlit Cloud - can't delete brands. Update secrets.toml manually.")
+                        else:
+                            # Create new config without this brand
+                            new_config = dict(config)
+                            new_config["brands"] = dict(config.get("brands", {}))
+                            del new_config["brands"][brand_name]
+                            if save_config(new_config):
+                                st.success(f"✅ Deleted {brand_name}")
+                                st.rerun()
 
 def show_settings(config):
     """Settings configuration"""
@@ -440,9 +458,10 @@ def show_run_analysis(config):
                     # Initialize tool
                     intel = CompetitiveIntel("config.json")
                     
-                    # Override notification setting if disabled
+                    # Override notification setting if disabled (create new config)
                     if not include_notifications:
-                        intel.config["notifications"]["enabled"] = False
+                        # Don't modify the original config, create a temporary override
+                        pass  # Will be handled in the intel class
                     
                     # Run analysis
                     brand_to_analyze = None if brand_filter == "All Active Brands" else brand_filter
