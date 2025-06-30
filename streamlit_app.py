@@ -54,6 +54,35 @@ st.markdown("""
     border-radius: 4px;
     margin: 1rem 0;
 }
+.stTab {
+    background-color: #fafafa;
+}
+.stButton > button {
+    background-color: #ff4b4b;
+    color: white;
+    border-radius: 8px;
+    border: none;
+    transition: all 0.3s ease;
+}
+.stButton > button:hover {
+    background-color: #ff3333;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+}
+div[data-testid="metric-container"] {
+    background-color: #f0f2f6;
+    border: 1px solid #e0e0e0;
+    padding: 1rem;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+.step-header {
+    background: linear-gradient(90deg, #ff4b4b, #ff6b6b);
+    color: white;
+    padding: 1rem;
+    border-radius: 8px;
+    margin-bottom: 1rem;
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -327,7 +356,12 @@ def get_recent_reports():
         return []
 
 def main():
-    st.markdown('<h1 class="main-header">🎯 Competitive Intelligence Tool</h1>', unsafe_allow_html=True)
+    st.markdown("""
+    <div class="step-header">
+        <h1 style="margin: 0; font-size: 2.5rem;">🎯 Competitive Intelligence Tool</h1>
+        <p style="margin: 0.5rem 0 0 0; opacity: 0.9; font-size: 1.1rem;">Automate competitor analysis with AI-powered insights</p>
+    </div>
+    """, unsafe_allow_html=True)
     
     # Load config
     config = load_config()
@@ -342,10 +376,20 @@ def main():
     has_completed_analysis = 'analysis_insights' in st.session_state and st.session_state.analysis_insights
     
     # Sidebar for navigation with step progress
-    st.sidebar.title("🎯 Competitive Intel")
+    st.sidebar.markdown("""
+    <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+                color: white; 
+                padding: 1rem; 
+                border-radius: 8px; 
+                margin-bottom: 1rem;
+                text-align: center;">
+        <h2 style="margin: 0;">🎯 Competitive Intel</h2>
+        <p style="margin: 0.5rem 0 0 0; opacity: 0.9;">AI-powered analysis</p>
+    </div>
+    """, unsafe_allow_html=True)
     
     # Progress indicator
-    st.sidebar.markdown("### Setup Progress")
+    st.sidebar.markdown("### 📊 Setup Progress")
     step1_status = "✅" if has_api_keys else "1️⃣"
     step2_status = "✅" if has_brands else "2️⃣" if has_api_keys else "⏸️"
     step3_status = "✅" if has_completed_analysis else "3️⃣" if has_api_keys and has_brands else "⏸️"
@@ -435,8 +479,17 @@ def main():
             default_page = "5️⃣ Step 5: Setup Automation"
             del st.session_state.force_step_5  # Clear the flag
     
+    # Handle stay_on_step_5 flag to prevent unwanted navigation when entering Pipedream token
+    if 'stay_on_step_5' in st.session_state and st.session_state.stay_on_step_5:
+        if "5️⃣ Step 5: Setup Automation" in available_pages:
+            default_page = "5️⃣ Step 5: Setup Automation"
+    
     page = st.sidebar.selectbox("Choose a page", available_pages, 
                                index=available_pages.index(default_page) if default_page in available_pages else 0)
+    
+    # Clear stay_on_step_5 flag if user navigates away from Step 5
+    if 'stay_on_step_5' in st.session_state and page != "5️⃣ Step 5: Setup Automation":
+        del st.session_state.stay_on_step_5
     
     if page == "1️⃣ Step 1: Enter API Keys":
         show_step1_api_keys()
@@ -459,8 +512,12 @@ def main():
 
 def show_step1_api_keys():
     """Step 1: API Keys Setup"""
-    st.markdown("# 1️⃣ Step 1: Enter Your API Keys")
-    st.markdown("---")
+    st.markdown("""
+    <div class="step-header">
+        <h1 style="margin: 0;">1️⃣ Step 1: Enter Your API Keys</h1>
+        <p style="margin: 0.5rem 0 0 0; opacity: 0.9;">Set up your data collection and analysis keys</p>
+    </div>
+    """, unsafe_allow_html=True)
     
     st.markdown("""
     ### Welcome to Competitive Intelligence Tool! 🎯
@@ -559,8 +616,12 @@ def show_step1_api_keys():
 
 def show_step2_brand_selection(config):
     """Step 2: Brand Selection"""
-    st.markdown("# 2️⃣ Step 2: Select Brands to Analyze")
-    st.markdown("---")
+    st.markdown("""
+    <div class="step-header">
+        <h1 style="margin: 0;">2️⃣ Step 2: Select Brands to Analyze</h1>
+        <p style="margin: 0.5rem 0 0 0; opacity: 0.9;">Choose your competitors to monitor</p>
+    </div>
+    """, unsafe_allow_html=True)
     
     st.markdown("""
     ### Choose which brands you want to analyze 🎯
@@ -674,8 +735,12 @@ def show_step2_brand_selection(config):
 
 def show_step3_run_analysis(config):
     """Step 3: Run Analysis"""
-    st.markdown("# 3️⃣ Step 3: Run Analysis")
-    st.markdown("---")
+    st.markdown("""
+    <div class="step-header">
+        <h1 style="margin: 0;">3️⃣ Step 3: Run Analysis</h1>
+        <p style="margin: 0.5rem 0 0 0; opacity: 0.9;">Launch AI-powered competitive intelligence</p>
+    </div>
+    """, unsafe_allow_html=True)
     
     # Get session-enhanced config
     session_config = get_session_config(config)
@@ -837,10 +902,7 @@ def show_step3_run_analysis(config):
                                         del st.session_state.quick_brands
                                     st.rerun()
                             
-                            # Show report preview
-                            st.markdown("---")
-                            st.markdown("### 📄 Report Preview")
-                            st.markdown(report[:1000] + "..." if len(report) > 1000 else report)
+                            # No report preview - full results shown in Step 4
                             
                         else:
                             st.error("❌ Analysis failed. Please check your API keys and try again.")
@@ -857,8 +919,12 @@ def show_step3_run_analysis(config):
 
 def show_step4_view_results(config):
     """Step 4: View Analysis Results"""
-    st.markdown("# 4️⃣ Step 4: View Analysis Results")
-    st.markdown("---")
+    st.markdown("""
+    <div class="step-header">
+        <h1 style="margin: 0;">4️⃣ Step 4: View Analysis Results</h1>
+        <p style="margin: 0.5rem 0 0 0; opacity: 0.9;">Explore your competitive intelligence insights</p>
+    </div>
+    """, unsafe_allow_html=True)
     
     # Check if we have analysis results
     if 'analysis_insights' not in st.session_state or not st.session_state.analysis_insights:
@@ -895,11 +961,129 @@ def show_step4_view_results(config):
         active_rate = int(active_ads / total_ads * 100) if total_ads > 0 else 0
         st.metric("Active Rate", f"{active_rate}%")
     
-    # Show the full visual insights dashboard
-    st.markdown("---")
-    show_insights_dashboard(insights)
+    # Create tabs for organized viewing
+    tab1, tab2, tab3 = st.tabs(["📊 Visual Insights", "📄 Full Analysis Report", "💾 Export & Actions"])
     
-    # Action buttons
+    with tab1:
+        st.markdown("### 📊 Interactive Data Visualizations")
+        show_insights_dashboard(insights)
+    
+    with tab2:
+        st.markdown("### 📄 Complete Analysis Report")
+        
+        if 'last_analysis_report' in st.session_state:
+            # Parse and display the markdown report with better formatting
+            report = st.session_state.last_analysis_report
+            
+            # Split report into sections and format nicely
+            sections = report.split('\n## ')
+            
+            # Handle the main title
+            if sections[0].startswith('# '):
+                main_title = sections[0].replace('# ', '').split('\n')[0]
+                st.markdown(f"# {main_title}")
+                
+                # Show report metadata
+                if "Generated:" in sections[0]:
+                    lines = sections[0].split('\n')
+                    for line in lines[1:4]:  # Get first few lines after title
+                        if line.strip():
+                            st.markdown(f"*{line.strip()}*")
+                
+                sections = sections[1:]  # Remove the header section
+            
+            # Display each section with proper formatting
+            for i, section in enumerate(sections):
+                if section.strip():
+                    # Add back the ## prefix
+                    section = '## ' + section
+                    
+                    # Extract section title
+                    lines = section.split('\n')
+                    section_title = lines[0].replace('## ', '').strip()
+                    
+                    # Create expandable sections for better organization
+                    with st.expander(f"📋 {section_title}", expanded=(i < 3)):  # First 3 sections expanded
+                        # Process the section content
+                        content_lines = lines[1:]
+                        formatted_content = []
+                        
+                        for line in content_lines:
+                            line = line.strip()
+                            if line:
+                                # Format bullet points
+                                if line.startswith('- '):
+                                    formatted_content.append(f"• {line[2:]}")
+                                elif line.startswith('* '):
+                                    formatted_content.append(f"• {line[2:]}")
+                                # Format bold text
+                                elif line.startswith('**') and line.endswith('**'):
+                                    formatted_content.append(f"### {line[2:-2]}")
+                                else:
+                                    formatted_content.append(line)
+                        
+                        # Display formatted content
+                        if formatted_content:
+                            st.markdown('\n'.join(formatted_content))
+        else:
+            st.warning("⚠️ Analysis report not found. Please run analysis again.")
+    
+    with tab3:
+        st.markdown("### 💾 Export & Actions")
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.markdown("#### 📥 Download Options")
+            
+            if 'last_analysis_report' in st.session_state:
+                # Markdown report
+                st.download_button(
+                    "📄 Download Markdown Report",
+                    data=st.session_state.last_analysis_report,
+                    file_name=f"competitive_analysis_{datetime.now().strftime('%Y%m%d_%H%M%S')}.md",
+                    mime="text/markdown",
+                    use_container_width=True
+                )
+                
+                # JSON data export
+                insights_json = json.dumps(insights, indent=2, default=str)
+                st.download_button(
+                    "📊 Download Raw Data (JSON)",
+                    data=insights_json,
+                    file_name=f"competitive_data_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json",
+                    mime="application/json",
+                    use_container_width=True
+                )
+        
+        with col2:
+            st.markdown("#### 🔄 Next Steps")
+            
+            if st.button("⬅️ Run New Analysis", use_container_width=True):
+                # Clear current analysis and go back to Step 2
+                if 'analysis_insights' in st.session_state:
+                    del st.session_state.analysis_insights
+                if 'last_analysis_report' in st.session_state:
+                    del st.session_state.last_analysis_report
+                st.session_state.selected_brands = []
+                st.session_state.force_step_2 = True
+                st.rerun()
+            
+            if st.button("📧 Share via Email", use_container_width=True):
+                # Generate email content
+                if 'last_analysis_report' in st.session_state:
+                    email_subject = f"Competitive Analysis Report - {datetime.now().strftime('%B %d, %Y')}"
+                    email_body = f"Subject: {email_subject}\n\nHi,\n\nPlease find the competitive analysis report below:\n\n{st.session_state.last_analysis_report[:500]}...\n\nBest regards"
+                    
+                    st.download_button(
+                        "📧 Download Email Template",
+                        data=email_body,
+                        file_name="competitive_analysis_email.txt",
+                        mime="text/plain",
+                        use_container_width=True
+                    )
+    
+    # Navigation buttons (outside tabs)
     st.markdown("---")
     st.markdown("### 🚀 What's Next?")
     
@@ -928,8 +1112,12 @@ def show_step4_view_results(config):
 
 def show_step5_automation_setup(config):
     """Step 5: Automation & Webhook Setup"""
-    st.markdown("# 5️⃣ Step 5: Setup Automation")
-    st.markdown("---")
+    st.markdown("""
+    <div class="step-header">
+        <h1 style="margin: 0;">5️⃣ Step 5: Setup Automation</h1>
+        <p style="margin: 0.5rem 0 0 0; opacity: 0.9;">Automate your competitive intelligence workflow</p>
+    </div>
+    """, unsafe_allow_html=True)
     
     st.markdown("""
     ### 🔄 Automate Your Competitive Intelligence! 
@@ -982,6 +1170,12 @@ def show_step5_automation_setup(config):
             st.session_state.pipedream_token = pipedream_token
             pd_integration.api_token = pipedream_token
             st.success("✅ Pipedream API token set")
+            # Prevent navigation back to Step 4 when token is entered
+            st.session_state.stay_on_step_5 = True
+        else:
+            # Clear the stay flag if token is removed
+            if 'stay_on_step_5' in st.session_state:
+                del st.session_state.stay_on_step_5
         
         # Service selection
         st.markdown("---")
