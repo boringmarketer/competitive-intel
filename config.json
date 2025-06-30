@@ -1,0 +1,29 @@
+{
+  "adyntel": {
+    "api_key": "",
+    "email": ""
+  },
+  "claude": {
+    "api_key": ""
+  },
+  "brands": {
+    "AG1": {
+      "facebook_id": "183869772601",
+      "domain": "drinkag1.com",
+      "active": true
+    },
+    "Gruns Daily": {
+      "facebook_id": "107585658730958",
+      "domain": "grunsdaily.com",
+      "active": false
+    }
+  },
+  "analysis": {
+    "lookback_days": 7,
+    "max_ads_per_brand": 10
+  },
+  "notifications": {
+    "webhook_url": "",
+    "enabled": true
+  }
+}
