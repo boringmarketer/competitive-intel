@@ -405,8 +405,29 @@ def main():
             "📄 View Reports"
         ]
     
+    # Handle forced navigation states
+    if 'force_step_1' in st.session_state and st.session_state.force_step_1:
+        if "1️⃣ Step 1: Enter API Keys" in available_pages:
+            default_page = "1️⃣ Step 1: Enter API Keys"
+            del st.session_state.force_step_1  # Clear the flag
+    
+    if 'force_step_2' in st.session_state and st.session_state.force_step_2:
+        if "2️⃣ Step 2: Select Brands" in available_pages:
+            default_page = "2️⃣ Step 2: Select Brands"
+            del st.session_state.force_step_2  # Clear the flag
+    
+    if 'force_step_3' in st.session_state and st.session_state.force_step_3:
+        if "3️⃣ Step 3: Run Analysis" in available_pages:
+            default_page = "3️⃣ Step 3: Run Analysis"
+            del st.session_state.force_step_3  # Clear the flag
+    
+    if 'force_step_4' in st.session_state and st.session_state.force_step_4:
+        if "4️⃣ Step 4: Setup Automation" in available_pages:
+            default_page = "4️⃣ Step 4: Setup Automation"
+            del st.session_state.force_step_4  # Clear the flag
+    
     page = st.sidebar.selectbox("Choose a page", available_pages, 
-                               index=0 if not show_advanced else available_pages.index(default_page) if default_page in available_pages else 0)
+                               index=available_pages.index(default_page) if default_page in available_pages else 0)
     
     if page == "1️⃣ Step 1: Enter API Keys":
         show_step1_api_keys()
@@ -501,6 +522,8 @@ def show_step1_api_keys():
         if has_apify and has_claude:
             st.success("🎉 Ready for Step 2!")
             if st.button("➡️ Continue to Step 2: Select Brands", type="primary", use_container_width=True):
+                # Set navigation state to force Step 2
+                st.session_state.force_step_2 = True
                 st.rerun()
         else:
             st.warning("⏳ Complete setup above")
@@ -623,13 +646,19 @@ def show_step2_brand_selection(config):
         col1, col2 = st.columns(2)
         with col1:
             if st.button("⬅️ Back to Step 1", use_container_width=True):
+                # Set navigation state to force Step 1
+                st.session_state.force_step_1 = True
                 st.rerun()
         with col2:
             if st.button("➡️ Continue to Step 3: Run Analysis", type="primary", use_container_width=True):
+                # Set navigation state to force Step 3
+                st.session_state.force_step_3 = True
                 st.rerun()
     else:
         st.warning("⚠️ Please select at least one brand to analyze")
         if st.button("⬅️ Back to Step 1", use_container_width=True):
+            # Set navigation state to force Step 1
+            st.session_state.force_step_1 = True
             st.rerun()
 
 def show_step3_run_analysis(config):
@@ -680,6 +709,8 @@ def show_step3_run_analysis(config):
     else:
         st.error("❌ No brands selected. Go back to Step 2.")
         if st.button("⬅️ Back to Step 2"):
+            # Set navigation state to force Step 2
+            st.session_state.force_step_2 = True
             st.rerun()
         return
     
@@ -714,6 +745,8 @@ def show_step3_run_analysis(config):
     col1, col2 = st.columns([1, 2])
     with col1:
         if st.button("⬅️ Back to Step 2", use_container_width=True):
+            # Set navigation state to force Step 2
+            st.session_state.force_step_2 = True
             st.rerun()
     
     with col2:
@@ -764,6 +797,8 @@ def show_step3_run_analysis(config):
                             
                             # Primary next step
                             if st.button("➡️ Continue to Step 4: Setup Automation", type="primary", use_container_width=True):
+                                # Set navigation state to force Step 4
+                                st.session_state.force_step_4 = True
                                 st.rerun()
                             
                             st.markdown("**Or explore your results:**")
