@@ -145,6 +145,21 @@ class CompetitiveIntel:
             if results_response.status_code == 200:
                 ads = results_response.json()
                 print(f"  ✅ Found {len(ads)} ads")
+                
+                # Debug: Show data structure of first ad
+                if ads and len(ads) > 0:
+                    print(f"  🔍 First ad data structure:")
+                    first_ad = ads[0]
+                    print(f"    Keys: {list(first_ad.keys())}")
+                    # Show some sample values (truncated)
+                    for key, value in first_ad.items():
+                        if isinstance(value, str) and len(value) > 50:
+                            print(f"    {key}: {value[:50]}...")
+                        else:
+                            print(f"    {key}: {value}")
+                        if len(str(value)) > 100:  # Limit debug output
+                            break
+                
                 return ads[:self.config["analysis"]["max_ads_per_brand"]]
             else:
                 print(f"  ❌ Failed to get results: {results_response.status_code}")
@@ -162,15 +177,27 @@ class CompetitiveIntel:
         print(f"🧠 Analyzing {len(ads)} ads with Claude...")
         
         try:
-            # Prepare ad data for analysis
+            # Prepare ad data for analysis (handle both Apify and other formats)
             ad_summary = []
             for ad in ads[:3]:  # Analyze top 3 ads
-                snapshot = ad.get("snapshot", {})
-                ad_summary.append({
-                    "headline": snapshot.get("linkTitle") or snapshot.get("title", ""),
-                    "body": snapshot.get("body") or snapshot.get("adCreativeBody", ""),
-                    "landing_page": snapshot.get("linkUrl", "")
-                })
+                # Handle Apify format
+                if "adText" in ad:  # Apify format
+                    ad_summary.append({
+                        "headline": ad.get("headline", "") or ad.get("adText", "")[:100],
+                        "body": ad.get("adText", ""),
+                        "landing_page": ad.get("link", "") or ad.get("linkUrl", ""),
+                        "cta": ad.get("ctaText", ""),
+                        "image_url": ad.get("imageUrl", "")
+                    })
+                else:  # Legacy format (Adyntel)
+                    snapshot = ad.get("snapshot", {})
+                    ad_summary.append({
+                        "headline": snapshot.get("linkTitle") or snapshot.get("title", ""),
+                        "body": snapshot.get("body") or snapshot.get("adCreativeBody", ""),
+                        "landing_page": snapshot.get("linkUrl", ""),
+                        "cta": "",
+                        "image_url": ""
+                    })
             
             prompt = f"""Analyze these {len(ads)} competitor ads from {brand_name}:
 
@@ -221,13 +248,22 @@ Keep analysis concise and actionable - max 300 words."""
         landing_pages = []
         
         for ad in ads:
-            snapshot = ad.get("snapshot", {})
-            if headline := snapshot.get("linkTitle") or snapshot.get("title"):
-                headlines.append(headline)
-            if body := snapshot.get("body") or snapshot.get("adCreativeBody"):
-                bodies.append(body)
-            if url := snapshot.get("linkUrl"):
-                landing_pages.append(url)
+            # Handle Apify format
+            if "adText" in ad:  # Apify format
+                if headline := ad.get("headline") or ad.get("adText", "")[:100]:
+                    headlines.append(headline)
+                if body := ad.get("adText"):
+                    bodies.append(body)
+                if url := ad.get("link") or ad.get("linkUrl"):
+                    landing_pages.append(url)
+            else:  # Legacy format (Adyntel)
+                snapshot = ad.get("snapshot", {})
+                if headline := snapshot.get("linkTitle") or snapshot.get("title"):
+                    headlines.append(headline)
+                if body := snapshot.get("body") or snapshot.get("adCreativeBody"):
+                    bodies.append(body)
+                if url := snapshot.get("linkUrl"):
+                    landing_pages.append(url)
         
         # Extract themes from ad text
         all_text = " ".join(headlines + bodies).lower()
