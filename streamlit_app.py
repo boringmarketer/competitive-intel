@@ -338,6 +338,7 @@ def main():
                    ('temp_claude_key' in st.session_state and st.session_state.temp_claude_key)
     has_brands = ('selected_brands' in st.session_state and st.session_state.selected_brands) or \
                  ('quick_brands' in st.session_state and st.session_state.quick_brands)
+    has_completed_analysis = 'analysis_insights' in st.session_state and st.session_state.analysis_insights
     
     # Sidebar for navigation with step progress
     st.sidebar.title("🎯 Competitive Intel")
@@ -346,12 +347,14 @@ def main():
     st.sidebar.markdown("### Setup Progress")
     step1_status = "✅" if has_api_keys else "1️⃣"
     step2_status = "✅" if has_brands else "2️⃣" if has_api_keys else "⏸️"
-    step3_status = "✅" if has_api_keys and has_brands else "3️⃣" if has_api_keys and has_brands else "⏸️"
+    step3_status = "✅" if has_completed_analysis else "3️⃣" if has_api_keys and has_brands else "⏸️"
+    step4_status = "4️⃣" if has_completed_analysis else "⏸️"
     
     st.sidebar.markdown(f"""
     {step1_status} **Step 1**: API Keys  
     {step2_status} **Step 2**: Select Brands  
     {step3_status} **Step 3**: Run Analysis  
+    {step4_status} **Step 4**: Setup Automation  
     """)
     
     # Navigation based on setup status
@@ -366,16 +369,25 @@ def main():
             "2️⃣ Step 2: Select Brands"
         ]
         default_page = "2️⃣ Step 2: Select Brands"
+    elif not has_completed_analysis:
+        # Steps 1-3 available
+        available_pages = [
+            "1️⃣ Step 1: Enter API Keys",
+            "2️⃣ Step 2: Select Brands", 
+            "3️⃣ Step 3: Run Analysis"
+        ]
+        default_page = "3️⃣ Step 3: Run Analysis"
     else:
-        # All steps available
+        # All steps available including automation
         available_pages = [
             "1️⃣ Step 1: Enter API Keys",
             "2️⃣ Step 2: Select Brands", 
             "3️⃣ Step 3: Run Analysis",
+            "4️⃣ Step 4: Setup Automation",
             "📈 Visual Insights",
             "📄 View Reports"
         ]
-        default_page = "3️⃣ Step 3: Run Analysis"
+        default_page = "4️⃣ Step 4: Setup Automation"
     
     # Add advanced options for experienced users
     st.sidebar.markdown("---")
@@ -386,6 +398,7 @@ def main():
             "1️⃣ Step 1: Enter API Keys",
             "2️⃣ Step 2: Select Brands", 
             "3️⃣ Step 3: Run Analysis",
+            "4️⃣ Step 4: Setup Automation",
             "🎯 Brand Management", 
             "📈 Visual Insights",
             "📄 View Reports"
@@ -400,6 +413,8 @@ def main():
         show_step2_brand_selection(config)
     elif page == "3️⃣ Step 3: Run Analysis":
         show_step3_run_analysis(config)
+    elif page == "4️⃣ Step 4: Setup Automation":
+        show_step4_automation_setup(config)
     elif page == "🎯 Brand Management":
         show_brand_management(config)
     elif page == "📈 Visual Insights":
@@ -746,6 +761,11 @@ def show_step3_run_analysis(config):
                             # Action buttons
                             st.markdown("### 🎉 Analysis Complete! What's next?")
                             
+                            # Primary next step
+                            if st.button("➡️ Continue to Step 4: Setup Automation", type="primary", use_container_width=True):
+                                st.rerun()
+                            
+                            st.markdown("**Or explore your results:**")
                             col1, col2, col3 = st.columns(3)
                             with col1:
                                 st.download_button(
@@ -786,6 +806,294 @@ def show_step3_run_analysis(config):
                     
                     finally:
                         st.session_state.analysis_running = False
+
+def show_step4_automation_setup(config):
+    """Step 4: Automation & Webhook Setup"""
+    st.markdown("# 4️⃣ Step 4: Setup Automation")
+    st.markdown("---")
+    
+    st.markdown("""
+    ### 🔄 Automate Your Competitive Intelligence! 
+    
+    Great job! You've successfully run your first analysis. Now let's set up automation so you can:
+    - **Get regular competitive updates** delivered to Slack, email, or other tools
+    - **Schedule analysis** to run daily, weekly, or at custom intervals
+    - **Monitor competitor changes** without manual work
+    """)
+    
+    # Show what they analyzed
+    if 'analysis_insights' in st.session_state and st.session_state.analysis_insights:
+        insights = st.session_state.analysis_insights
+        total_ads = sum(brand_insights.get('performance_indicators', {}).get('total_ads', 0) 
+                       for brand_insights in insights.values())
+        brands_analyzed = len(insights)
+        
+        st.success(f"✅ **Your last analysis**: {brands_analyzed} brands, {total_ads} ads analyzed")
+    
+    # Automation configuration
+    tab1, tab2, tab3 = st.tabs(["🔗 Webhook Setup", "⏰ Schedule Settings", "📋 Summary"])
+    
+    with tab1:
+        st.markdown("### 🔗 Webhook Configuration")
+        st.markdown("""
+        Connect your analysis to external tools like Slack, Discord, Teams, or custom applications.
+        We'll show you how to set up a **Pipedream workflow** that can send results anywhere.
+        """)
+        
+        # Webhook URL input
+        webhook_url = st.text_input(
+            "Webhook URL",
+            value=st.session_state.get('automation_webhook', ''),
+            placeholder="https://your-pipedream-workflow.m.pipedream.net",
+            help="We'll show you how to create this in Pipedream below"
+        )
+        
+        if webhook_url:
+            st.session_state.automation_webhook = webhook_url
+            st.success("✅ Webhook URL saved for this session")
+        
+        # Test webhook
+        if webhook_url:
+            col1, col2 = st.columns(2)
+            with col1:
+                if st.button("🧪 Test Webhook"):
+                    with st.spinner("Testing webhook..."):
+                        try:
+                            import requests
+                            test_payload = {
+                                "test": True,
+                                "message": "Test from Competitive Intelligence Tool",
+                                "timestamp": datetime.now().isoformat(),
+                                "source": "competitive-intel-tool"
+                            }
+                            
+                            response = requests.post(webhook_url, json=test_payload, timeout=10)
+                            if response.status_code == 200:
+                                st.success("✅ Webhook test successful!")
+                            else:
+                                st.error(f"❌ Webhook test failed: {response.status_code}")
+                        except Exception as e:
+                            st.error(f"❌ Webhook test error: {str(e)}")
+            
+            with col2:
+                notification_format = st.selectbox(
+                    "Notification Format",
+                    ["Slack", "Discord", "Teams", "Custom JSON"],
+                    help="Choose how you want the data formatted"
+                )
+        
+        # Pipedream setup guide
+        st.markdown("---")
+        st.markdown("### 🔧 How to Setup Pipedream Webhook")
+        
+        with st.expander("📖 Step-by-Step Pipedream Setup Guide"):
+            st.markdown("""
+            **1. Create Pipedream Account**
+            - Go to [pipedream.com](https://pipedream.com) and sign up (free)
+            
+            **2. Create New Workflow**
+            - Click "New Workflow"
+            - Choose "HTTP Request" as trigger
+            - Copy the webhook URL it gives you (paste above)
+            
+            **3. Add Slack Step** (or your preferred destination)
+            - Click "+" to add step
+            - Search for "Slack" 
+            - Choose "Send Message to Channel"
+            - Connect your Slack workspace
+            - Choose channel (e.g., #competitive-intel)
+            
+            **4. Configure Message Format**
+            ```javascript
+            // In the message field, use:
+            `New Competitive Analysis Report 📊
+            
+            **Brands Analyzed**: {{steps.trigger.event.body.brands_count}}
+            **Total Ads Found**: {{steps.trigger.event.body.total_ads}}
+            **Analysis Date**: {{steps.trigger.event.body.timestamp}}
+            
+            **Key Insights**:
+            {{steps.trigger.event.body.summary}}
+            
+            [Download Full Report]({{steps.trigger.event.body.report_url}})
+            `
+            ```
+            
+            **5. Save & Test**
+            - Save the workflow
+            - Use the "Test Webhook" button above
+            - Check your Slack channel for the test message
+            """)
+        
+        # Sample payload
+        with st.expander("📋 Sample Webhook Payload"):
+            sample_payload = {
+                "report": "# Competitive Analysis Report...",
+                "timestamp": "2024-01-15T10:30:00Z",
+                "source": "competitive-intel-tool",
+                "brands_count": 2,
+                "total_ads": 15,
+                "summary": "AG1 is running 67% video ads with energy themes, while competitor focuses on convenience messaging",
+                "insights": {
+                    "AG1": {
+                        "total_ads": 10,
+                        "active_ads": 8,
+                        "dominant_media": "video",
+                        "main_themes": ["energy", "science"]
+                    }
+                }
+            }
+            st.json(sample_payload)
+    
+    with tab2:
+        st.markdown("### ⏰ Automation Schedule")
+        st.markdown("Configure when and how often to run competitive analysis automatically.")
+        
+        # Schedule options
+        schedule_type = st.radio(
+            "How often should we analyze competitors?",
+            ["Manual only", "Daily", "Weekly", "Custom interval"],
+            help="Choose your monitoring frequency"
+        )
+        
+        if schedule_type != "Manual only":
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                if schedule_type == "Custom interval":
+                    interval_days = st.number_input("Interval (days)", min_value=1, max_value=30, value=7)
+                else:
+                    interval_days = 1 if schedule_type == "Daily" else 7
+                
+                lookback_days = st.number_input(
+                    "Lookback window (days)", 
+                    min_value=1, 
+                    max_value=90, 
+                    value=7,
+                    help="How many days back to search for new ads"
+                )
+            
+            with col2:
+                max_ads = st.number_input(
+                    "Max ads per brand",
+                    min_value=1,
+                    max_value=50,
+                    value=10,
+                    help="Limit ads to analyze per brand"
+                )
+                
+                if schedule_type in ["Daily", "Weekly", "Custom interval"]:
+                    preferred_time = st.time_input("Preferred time", value=datetime.now().time())
+        
+        # Save automation settings
+        if schedule_type != "Manual only":
+            automation_config = {
+                "schedule_type": schedule_type,
+                "interval_days": interval_days,
+                "lookback_days": lookback_days,
+                "max_ads": max_ads,
+                "webhook_url": st.session_state.get('automation_webhook', ''),
+                "brands": st.session_state.get('selected_brands', []),
+                "api_keys_note": "User must provide their own API keys"
+            }
+            
+            st.session_state.automation_config = automation_config
+            
+            st.info("""
+            💡 **Note**: This tool runs in your browser session. For true automation, you'll need to:
+            1. Set up the Pipedream webhook (Step 1)
+            2. Use Pipedream's scheduler to call this tool's API regularly
+            3. Or deploy this tool to a server with cron jobs
+            """)
+    
+    with tab3:
+        st.markdown("### 📋 Automation Summary")
+        
+        # Show current configuration
+        if 'automation_config' in st.session_state:
+            config = st.session_state.automation_config
+            
+            st.success("✅ **Automation Configuration Saved**")
+            
+            col1, col2 = st.columns(2)
+            with col1:
+                st.metric("Schedule", config.get('schedule_type', 'Manual'))
+                st.metric("Lookback Days", config.get('lookback_days', 7))
+            
+            with col2:
+                st.metric("Interval", f"{config.get('interval_days', 1)} days")
+                st.metric("Max Ads/Brand", config.get('max_ads', 10))
+            
+            st.markdown("**Brands to Monitor:**")
+            for brand in config.get('brands', []):
+                st.write(f"• {brand}")
+            
+            if config.get('webhook_url'):
+                st.success(f"✅ Webhook configured: {config['webhook_url'][:50]}...")
+            else:
+                st.warning("⚠️ No webhook configured - reports won't be sent automatically")
+            
+        else:
+            st.info("Configure automation settings in the Schedule tab above")
+        
+        # Export configuration
+        st.markdown("---")
+        st.markdown("### 📤 Export Configuration")
+        
+        if 'automation_config' in st.session_state:
+            config_json = json.dumps(st.session_state.automation_config, indent=2, default=str)
+            
+            col1, col2 = st.columns(2)
+            with col1:
+                st.download_button(
+                    "📥 Download Config",
+                    data=config_json,
+                    file_name=f"competitive_intel_config_{datetime.now().strftime('%Y%m%d')}.json",
+                    mime="application/json",
+                    use_container_width=True
+                )
+            
+            with col2:
+                if st.button("🔄 Run Analysis Now", type="primary", use_container_width=True):
+                    # Redirect to Step 3 with current config
+                    st.rerun()
+        
+        # Next steps
+        st.markdown("---")
+        st.markdown("### 🎉 You're All Set!")
+        st.markdown("""
+        **What you've accomplished:**
+        ✅ Set up API keys for data collection  
+        ✅ Selected brands to monitor  
+        ✅ Ran your first competitive analysis  
+        ✅ Configured automation and webhooks  
+        
+        **Next steps:**
+        - **View Visual Insights** to explore your data
+        - **Download reports** for deeper analysis  
+        - **Set up the Pipedream workflow** for automated delivery
+        - **Run regular analysis** to stay ahead of competitors
+        """)
+        
+        # Action buttons
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            if st.button("📊 View Visual Insights", use_container_width=True):
+                st.session_state.goto_insights = True
+                st.rerun()
+        
+        with col2:
+            if st.button("🔄 Run New Analysis", use_container_width=True):
+                # Reset for new analysis but keep automation config
+                st.session_state.selected_brands = []
+                if 'analysis_insights' in st.session_state:
+                    del st.session_state.analysis_insights
+                st.rerun()
+        
+        with col3:
+            if st.button("📄 View All Reports", use_container_width=True):
+                st.session_state.goto_reports = True
+                st.rerun()
 
 def show_quick_setup():
     """Quick setup page for session-based API keys"""
