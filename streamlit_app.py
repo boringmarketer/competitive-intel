@@ -94,6 +94,10 @@ def save_config(config):
         st.error(f"Failed to save config: {str(e)}")
         return False
 
+def is_using_secrets():
+    """Check if we're using Streamlit secrets"""
+    return hasattr(st, 'secrets') and 'config' in st.secrets
+
 def get_recent_reports():
     """Get list of recent reports"""
     try:
@@ -345,27 +349,42 @@ def show_settings(config):
     
     # Save settings
     if st.button("💾 Save Settings"):
-        # Ensure config structure exists
-        if "apify" not in config:
-            config["apify"] = {}
-        if "claude" not in config:
-            config["claude"] = {}
-        if "analysis" not in config:
-            config["analysis"] = {}
-        if "notifications" not in config:
-            config["notifications"] = {}
-            
-        config["apify"]["api_token"] = apify_token
-        config["claude"]["api_key"] = claude_key
-        config["analysis"]["lookback_days"] = lookback_days
-        config["analysis"]["max_ads_per_brand"] = max_ads
-        config["notifications"]["webhook_url"] = webhook_url
-        config["notifications"]["enabled"] = notifications_enabled
-        
-        if save_config(config):
-            st.success("✅ Settings saved successfully!")
+        if is_using_secrets():
+            st.warning("⚠️ Running on Streamlit Cloud - settings can't be saved locally. Update your secrets.toml instead:")
+            st.code(f"""[config.apify]
+api_token = "{apify_token}"
+
+[config.claude]
+api_key = "{claude_key}"
+
+[config.analysis]
+lookback_days = {lookback_days}
+max_ads_per_brand = {max_ads}
+
+[config.notifications]
+webhook_url = "{webhook_url}"
+enabled = {str(notifications_enabled).lower()}""")
         else:
-            st.error("❌ Failed to save settings")
+            # Create a new config dict (don't modify the read-only one)
+            new_config = {
+                "apify": {"api_token": apify_token},
+                "claude": {"api_key": claude_key},
+                "analysis": {
+                    "lookback_days": lookback_days,
+                    "max_ads_per_brand": max_ads
+                },
+                "notifications": {
+                    "webhook_url": webhook_url,
+                    "enabled": notifications_enabled
+                },
+                "brands": config.get("brands", {})
+            }
+            
+            if save_config(new_config):
+                st.success("✅ Settings saved successfully!")
+                st.rerun()
+            else:
+                st.error("❌ Failed to save settings")
 
 def show_run_analysis(config):
     """Run analysis interface"""
