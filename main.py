@@ -61,7 +61,7 @@ class CompetitiveIntel:
         
         url = "https://api.adyntel.com/facebook"
         
-        # Try multiple request configurations
+        # Try multiple request configurations based on Adyntel docs
         request_variations = []
         
         if brand_config.get("domain"):
@@ -69,30 +69,27 @@ class CompetitiveIntel:
                 {
                     "api_key": self.config["adyntel"]["api_key"],
                     "email": self.config["adyntel"]["email"],
-                    "company_domain": brand_config["domain"],
-                    "active_status": "all"
-                },
-                {
-                    "api_key": self.config["adyntel"]["api_key"],
-                    "email": self.config["adyntel"]["email"],
-                    "company_domain": brand_config["domain"],
-                    "active_status": "active"
+                    "company_domain": brand_config["domain"]
                 }
             ])
         
         if brand_config.get("facebook_id"):
+            # Try different Facebook URL formats
             request_variations.extend([
                 {
                     "api_key": self.config["adyntel"]["api_key"],
                     "email": self.config["adyntel"]["email"],
-                    "facebook_url": f"https://www.facebook.com/{brand_config['facebook_id']}",
-                    "active_status": "all"
+                    "facebook_url": f"https://www.facebook.com/{brand_config['facebook_id']}"
                 },
                 {
                     "api_key": self.config["adyntel"]["api_key"],
                     "email": self.config["adyntel"]["email"],
-                    "facebook_url": f"https://www.facebook.com/{brand_config['facebook_id']}",
-                    "active_status": "active"
+                    "facebook_url": f"https://facebook.com/{brand_config['facebook_id']}"
+                },
+                {
+                    "api_key": self.config["adyntel"]["api_key"],
+                    "email": self.config["adyntel"]["email"],
+                    "facebook_url": f"facebook.com/{brand_config['facebook_id']}"
                 }
             ])
         
