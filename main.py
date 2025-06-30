@@ -9,7 +9,7 @@ import requests
 import os
 import time
 from datetime import datetime, timedelta
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 import argparse
 
 
@@ -173,10 +173,119 @@ class CompetitiveIntel:
             print(f"  ❌ Apify request failed: {str(e)}")
             return []
     
-    def analyze_with_claude(self, brand_name: str, ads: List[Dict]) -> str:
+    def extract_ad_insights(self, ads: List[Dict]) -> Dict:
+        """Extract structured insights from ads for visualization"""
+        insights = {
+            "media_distribution": {"video": 0, "image": 0, "text_only": 0},
+            "platform_distribution": {},
+            "cta_types": {},
+            "themes": {
+                "science": 0, "convenience": 0, "energy": 0, "health": 0,
+                "premium": 0, "social_proof": 0, "urgency": 0
+            },
+            "performance_indicators": {
+                "active_ads": 0,
+                "total_ads": len(ads),
+                "avg_days_running": 0,
+                "unique_headlines": 0,
+                "unique_landing_pages": 0
+            },
+            "raw_data": {
+                "headlines": [],
+                "bodies": [],
+                "ctas": [],
+                "landing_pages": [],
+                "platforms": []
+            }
+        }
+        
+        headlines_set = set()
+        landing_pages_set = set()
+        total_days = 0
+        active_count = 0
+        
+        for ad in ads:
+            # Handle Apify Facebook Ad Library format
+            if "snapshot" in ad and "cards" in ad.get("snapshot", {}):
+                snapshot = ad["snapshot"]
+                cards = snapshot.get("cards", [])
+                
+                if cards:
+                    card = cards[0]
+                    
+                    # Media type analysis
+                    if card.get("videoHdUrl") or card.get("videoSdUrl"):
+                        insights["media_distribution"]["video"] += 1
+                    elif card.get("originalImageUrl"):
+                        insights["media_distribution"]["image"] += 1
+                    else:
+                        insights["media_distribution"]["text_only"] += 1
+                    
+                    # Extract text content
+                    headline = card.get("title", "") or snapshot.get("title", "")
+                    body = card.get("body", "") or snapshot.get("body", {}).get("text", "")
+                    cta = card.get("ctaText", "")
+                    landing_page = card.get("linkUrl", "") or snapshot.get("linkUrl", "")
+                    
+                    if headline:
+                        headlines_set.add(headline)
+                        insights["raw_data"]["headlines"].append(headline)
+                    if body:
+                        insights["raw_data"]["bodies"].append(body)
+                    if cta:
+                        insights["cta_types"][cta] = insights["cta_types"].get(cta, 0) + 1
+                        insights["raw_data"]["ctas"].append(cta)
+                    if landing_page:
+                        landing_pages_set.add(landing_page)
+                        insights["raw_data"]["landing_pages"].append(landing_page)
+                    
+                    # Theme analysis
+                    all_text = f"{headline} {body}".lower()
+                    if any(word in all_text for word in ["clinical", "research", "study", "proven", "science", "doctor"]):
+                        insights["themes"]["science"] += 1
+                    if any(word in all_text for word in ["simple", "easy", "daily", "one scoop", "convenient"]):
+                        insights["themes"]["convenience"] += 1
+                    if any(word in all_text for word in ["energy", "boost", "performance", "vitality", "focus"]):
+                        insights["themes"]["energy"] += 1
+                    if any(word in all_text for word in ["health", "wellness", "nutrition", "vitamin", "immune"]):
+                        insights["themes"]["health"] += 1
+                    if any(word in all_text for word in ["premium", "quality", "best", "superior", "luxury"]):
+                        insights["themes"]["premium"] += 1
+                    if any(word in all_text for word in ["customers", "reviews", "testimonial", "loved", "rated"]):
+                        insights["themes"]["social_proof"] += 1
+                    if any(word in all_text for word in ["limited", "now", "today", "hurry", "expires"]):
+                        insights["themes"]["urgency"] += 1
+                
+                # Platform analysis
+                platforms = ad.get("publisherPlatform", [])
+                for platform in platforms:
+                    insights["platform_distribution"][platform] = insights["platform_distribution"].get(platform, 0) + 1
+                    insights["raw_data"]["platforms"].append(platform)
+                
+                # Performance indicators
+                if ad.get("isActive"):
+                    active_count += 1
+                
+                total_time = ad.get("totalActiveTime", 0)
+                if total_time:
+                    days = total_time // (24 * 3600)
+                    total_days += days
+        
+        # Calculate averages
+        insights["performance_indicators"]["active_ads"] = active_count
+        insights["performance_indicators"]["unique_headlines"] = len(headlines_set)
+        insights["performance_indicators"]["unique_landing_pages"] = len(landing_pages_set)
+        insights["performance_indicators"]["avg_days_running"] = total_days // len(ads) if ads else 0
+        
+        return insights
+    
+    def analyze_with_claude(self, brand_name: str, ads: List[Dict]) -> Tuple[str, Dict]:
         """Analyze ads using Claude API"""
+        # Extract structured insights first
+        insights = self.extract_ad_insights(ads)
+        
         if not ads:
-            return f"# {brand_name} Market Status\n\nNo active ads detected. Market opportunity window identified."
+            return f"# {brand_name} Market Status\n\nNo active ads detected. Market opportunity window identified.", insights
         
         print(f"🧠 Analyzing {len(ads)} ads with Claude...")
         
@@ -329,14 +438,14 @@ Focus on actionable intelligence for immediate competitive advantage."""
                 data = response.json()
                 analysis = data["content"][0]["text"]
                 print("  ✅ Claude analysis completed")
-                return analysis
+                return analysis, insights
             else:
                 print(f"  ❌ Claude API error: {response.status_code}")
-                return self.fallback_analysis(brand_name, ads)
+                return self.fallback_analysis(brand_name, ads), insights
                 
         except Exception as e:
             print(f"  ❌ Claude analysis failed: {str(e)}")
-            return self.fallback_analysis(brand_name, ads)
+            return self.fallback_analysis(brand_name, ads), insights
     
     def fallback_analysis(self, brand_name: str, ads: List[Dict]) -> str:
         """Generate smart fallback analysis using real ad data"""
@@ -506,7 +615,7 @@ Focus on actionable intelligence for immediate competitive advantage."""
         print(f"💾 Report saved: {filename}")
         return filename
     
-    def run_analysis(self, brand_filter: Optional[str] = None) -> str:
+    def run_analysis(self, brand_filter: Optional[str] = None) -> Tuple[str, Dict]:
         """Run complete competitive analysis"""
         print("🚀 Starting Competitive Intelligence Analysis...")
         
@@ -532,6 +641,7 @@ Generated: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
         
         # Analyze each brand
         total_ads = 0
+        all_insights = {}
         for brand_name, brand_config in active_brands.items():
             print(f"\n--- Analyzing {brand_name} ---")
             
@@ -540,7 +650,8 @@ Generated: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
             total_ads += len(ads)
             
             # Analyze with Claude
-            analysis = self.analyze_with_claude(brand_name, ads)
+            analysis, insights = self.analyze_with_claude(brand_name, ads)
+            all_insights[brand_name] = insights
             
             # Add to report
             report += f"{analysis}\n\n---\n\n"
@@ -562,7 +673,7 @@ Generated: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
         # Send notification
         self.send_notification(report)
         
-        return report
+        return report, all_insights
 
 
 def main():
@@ -582,7 +693,7 @@ def main():
     
     # Run analysis
     try:
-        report = intel.run_analysis(args.brand)
+        report, insights = intel.run_analysis(args.brand)
         if report:
             print(f"\n📄 Report preview:")
             print("=" * 50)

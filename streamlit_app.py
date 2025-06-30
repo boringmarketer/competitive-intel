@@ -4,6 +4,10 @@ import os
 from datetime import datetime
 from main import CompetitiveIntel
 import glob
+import plotly.express as px
+import plotly.graph_objects as go
+import pandas as pd
+from typing import Dict, Any
 
 # Page config
 st.set_page_config(
@@ -102,6 +106,216 @@ def is_using_secrets():
     """Check if we're using Streamlit secrets"""
     return hasattr(st, 'secrets') and 'config' in st.secrets
 
+def get_session_config(base_config):
+    """Get configuration with session-based API keys if available"""
+    config = dict(base_config)
+    
+    # Override with session keys if available
+    if 'temp_apify_key' in st.session_state and st.session_state.temp_apify_key:
+        config['apify'] = {'api_token': st.session_state.temp_apify_key}
+    if 'temp_claude_key' in st.session_state and st.session_state.temp_claude_key:
+        config['claude'] = {'api_key': st.session_state.temp_claude_key}
+    
+    return config
+
+def create_media_distribution_chart(insights: Dict) -> go.Figure:
+    """Create media distribution pie chart"""
+    media_data = insights.get('media_distribution', {})
+    if not any(media_data.values()):
+        return None
+    
+    fig = px.pie(
+        values=list(media_data.values()),
+        names=list(media_data.keys()),
+        title="📱 Media Format Distribution",
+        color_discrete_map={
+            'video': '#FF6B6B',
+            'image': '#4ECDC4', 
+            'text_only': '#45B7D1'
+        }
+    )
+    fig.update_traces(textposition='inside', textinfo='percent+label')
+    return fig
+
+def create_theme_analysis_chart(insights: Dict) -> go.Figure:
+    """Create theme analysis bar chart"""
+    themes = insights.get('themes', {})
+    if not any(themes.values()):
+        return None
+    
+    # Filter out zero values and sort by count
+    filtered_themes = {k: v for k, v in themes.items() if v > 0}
+    if not filtered_themes:
+        return None
+    
+    sorted_themes = dict(sorted(filtered_themes.items(), key=lambda x: x[1], reverse=True))
+    
+    fig = px.bar(
+        x=list(sorted_themes.values()),
+        y=list(sorted_themes.keys()),
+        orientation='h',
+        title="🎯 Messaging Themes Distribution",
+        labels={'x': 'Number of Ads', 'y': 'Theme'},
+        color=list(sorted_themes.values()),
+        color_continuous_scale='Viridis'
+    )
+    fig.update_layout(showlegend=False)
+    return fig
+
+def create_platform_distribution_chart(insights: Dict) -> go.Figure:
+    """Create platform distribution chart"""
+    platforms = insights.get('platform_distribution', {})
+    if not any(platforms.values()):
+        return None
+    
+    fig = px.bar(
+        x=list(platforms.keys()),
+        y=list(platforms.values()),
+        title="📊 Platform Distribution",
+        labels={'x': 'Platform', 'y': 'Number of Ads'},
+        color=list(platforms.values()),
+        color_continuous_scale='Blues'
+    )
+    return fig
+
+def create_cta_analysis_chart(insights: Dict) -> go.Figure:
+    """Create CTA analysis chart"""
+    ctas = insights.get('cta_types', {})
+    if not any(ctas.values()):
+        return None
+    
+    # Get top 10 CTAs
+    sorted_ctas = dict(sorted(ctas.items(), key=lambda x: x[1], reverse=True)[:10])
+    
+    fig = px.bar(
+        x=list(sorted_ctas.values()),
+        y=list(sorted_ctas.keys()),
+        orientation='h',
+        title="💬 Top Call-to-Action Types",
+        labels={'x': 'Frequency', 'y': 'CTA Text'},
+        color=list(sorted_ctas.values()),
+        color_continuous_scale='Oranges'
+    )
+    fig.update_layout(yaxis={'categoryorder': 'total ascending'})
+    return fig
+
+def show_insights_dashboard(insights: Dict[str, Dict]):
+    """Show interactive insights dashboard"""
+    st.markdown("## 📊 Visual Insights Dashboard")
+    
+    if not insights:
+        st.info("Run an analysis to see visual insights!")
+        return
+    
+    # Aggregate insights across all brands
+    total_media = {"video": 0, "image": 0, "text_only": 0}
+    total_themes = {"science": 0, "convenience": 0, "energy": 0, "health": 0, "premium": 0, "social_proof": 0, "urgency": 0}
+    total_platforms = {}
+    total_ctas = {}
+    total_performance = {"total_ads": 0, "active_ads": 0, "unique_headlines": 0, "unique_landing_pages": 0}
+    
+    for brand_name, brand_insights in insights.items():
+        # Aggregate media distribution
+        for media_type, count in brand_insights.get('media_distribution', {}).items():
+            total_media[media_type] += count
+        
+        # Aggregate themes
+        for theme, count in brand_insights.get('themes', {}).items():
+            total_themes[theme] += count
+        
+        # Aggregate platforms
+        for platform, count in brand_insights.get('platform_distribution', {}).items():
+            total_platforms[platform] = total_platforms.get(platform, 0) + count
+        
+        # Aggregate CTAs
+        for cta, count in brand_insights.get('cta_types', {}).items():
+            total_ctas[cta] = total_ctas.get(cta, 0) + count
+        
+        # Aggregate performance
+        perf = brand_insights.get('performance_indicators', {})
+        total_performance['total_ads'] += perf.get('total_ads', 0)
+        total_performance['active_ads'] += perf.get('active_ads', 0)
+        total_performance['unique_headlines'] += perf.get('unique_headlines', 0)
+        total_performance['unique_landing_pages'] += perf.get('unique_landing_pages', 0)
+    
+    # Create aggregated insights for charts
+    aggregated_insights = {
+        'media_distribution': total_media,
+        'themes': total_themes,
+        'platform_distribution': total_platforms,
+        'cta_types': total_ctas,
+        'performance_indicators': total_performance
+    }
+    
+    # Display key metrics
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        st.metric("Total Ads Analyzed", total_performance['total_ads'])
+    with col2:
+        active_rate = int(total_performance['active_ads'] / total_performance['total_ads'] * 100) if total_performance['total_ads'] > 0 else 0
+        st.metric("Active Rate", f"{active_rate}%")
+    with col3:
+        st.metric("Unique Headlines", total_performance['unique_headlines'])
+    with col4:
+        st.metric("Unique Landing Pages", total_performance['unique_landing_pages'])
+    
+    # Create charts
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        # Media distribution chart
+        media_fig = create_media_distribution_chart(aggregated_insights)
+        if media_fig:
+            st.plotly_chart(media_fig, use_container_width=True)
+        
+        # Platform distribution chart
+        platform_fig = create_platform_distribution_chart(aggregated_insights)
+        if platform_fig:
+            st.plotly_chart(platform_fig, use_container_width=True)
+    
+    with col2:
+        # Theme analysis chart
+        theme_fig = create_theme_analysis_chart(aggregated_insights)
+        if theme_fig:
+            st.plotly_chart(theme_fig, use_container_width=True)
+        
+        # CTA analysis chart
+        cta_fig = create_cta_analysis_chart(aggregated_insights)
+        if cta_fig:
+            st.plotly_chart(cta_fig, use_container_width=True)
+    
+    # Brand-by-brand breakdown
+    if len(insights) > 1:
+        st.markdown("### 🏢 Brand-by-Brand Breakdown")
+        
+        for brand_name, brand_insights in insights.items():
+            with st.expander(f"📊 {brand_name} Detailed Insights"):
+                perf = brand_insights.get('performance_indicators', {})
+                
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    st.metric(f"{brand_name} Total Ads", perf.get('total_ads', 0))
+                with col2:
+                    st.metric(f"{brand_name} Active Ads", perf.get('active_ads', 0))
+                with col3:
+                    avg_days = perf.get('avg_days_running', 0)
+                    st.metric(f"Avg Days Running", f"{avg_days} days")
+                
+                # Individual brand charts
+                brand_col1, brand_col2 = st.columns(2)
+                
+                with brand_col1:
+                    brand_media_fig = create_media_distribution_chart(brand_insights)
+                    if brand_media_fig:
+                        brand_media_fig.update_layout(title=f"{brand_name} - Media Distribution")
+                        st.plotly_chart(brand_media_fig, use_container_width=True)
+                
+                with brand_col2:
+                    brand_theme_fig = create_theme_analysis_chart(brand_insights)
+                    if brand_theme_fig:
+                        brand_theme_fig.update_layout(title=f"{brand_name} - Messaging Themes")
+                        st.plotly_chart(brand_theme_fig, use_container_width=True)
+
 def get_recent_reports():
     """Get list of recent reports"""
     try:
@@ -123,22 +337,130 @@ def main():
     st.sidebar.title("Navigation")
     page = st.sidebar.selectbox("Choose a page", [
         "🏠 Dashboard", 
+        "🔑 Quick Setup (Your API Keys)",
         "🎯 Brand Management", 
         "⚙️ Settings", 
         "📊 Run Analysis",
+        "📈 Visual Insights",
         "📄 View Reports"
     ])
     
     if page == "🏠 Dashboard":
         show_dashboard(config)
+    elif page == "🔑 Quick Setup (Your API Keys)":
+        show_quick_setup()
     elif page == "🎯 Brand Management":
         show_brand_management(config)
     elif page == "⚙️ Settings":
         show_settings(config)
     elif page == "📊 Run Analysis":
         show_run_analysis(config)
+    elif page == "📈 Visual Insights":
+        # Get insights from session state if available
+        insights = st.session_state.get('analysis_insights', {})
+        show_insights_dashboard(insights)
     elif page == "📄 View Reports":
         show_reports()
+
+def show_quick_setup():
+    """Quick setup page for session-based API keys"""
+    st.markdown('<h2 class="section-header">🔑 Quick Setup - Enter Your API Keys</h2>', unsafe_allow_html=True)
+    
+    st.markdown("""
+    **New to the tool?** Enter your API keys below to get started immediately. 
+    Your keys are only stored for this session and will be cleared when you close your browser.
+    """)
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.markdown("### 🔍 Apify API Key")
+        temp_apify_key = st.text_input(
+            "Apify API Token",
+            value=st.session_state.get('temp_apify_key', ''),
+            type="password",
+            help="Get your token from console.apify.com/account/integrations",
+            key="apify_input"
+        )
+        st.markdown("[Get Apify API Key →](https://console.apify.com/account/integrations)")
+        
+        if temp_apify_key:
+            st.session_state.temp_apify_key = temp_apify_key
+            st.success("✅ Apify API key set for this session")
+    
+    with col2:
+        st.markdown("### 🧠 Claude API Key")
+        temp_claude_key = st.text_input(
+            "Claude API Key",
+            value=st.session_state.get('temp_claude_key', ''),
+            type="password",
+            help="Get your key from console.anthropic.com",
+            key="claude_input"
+        )
+        st.markdown("[Get Claude API Key →](https://console.anthropic.com)")
+        
+        if temp_claude_key:
+            st.session_state.temp_claude_key = temp_claude_key
+            st.success("✅ Claude API key set for this session")
+    
+    # Quick brand setup
+    st.markdown("### 🎯 Quick Brand Setup")
+    st.markdown("Add a brand to analyze (you can add more in Brand Management):")
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        quick_brand_name = st.text_input("Brand Name", placeholder="e.g., Athletic Greens")
+        quick_facebook_id = st.text_input("Facebook Page ID", placeholder="e.g., 183869772601")
+    
+    with col2:
+        quick_domain = st.text_input("Company Domain", placeholder="e.g., drinkag1.com") 
+        if st.button("➕ Add Quick Brand"):
+            if quick_brand_name and (quick_facebook_id or quick_domain):
+                # Store in session state
+                if 'quick_brands' not in st.session_state:
+                    st.session_state.quick_brands = {}
+                
+                st.session_state.quick_brands[quick_brand_name] = {
+                    "facebook_id": quick_facebook_id,
+                    "domain": quick_domain,
+                    "active": True
+                }
+                st.success(f"✅ Added {quick_brand_name} for this session")
+                st.rerun()
+    
+    # Show session brands
+    if 'quick_brands' in st.session_state and st.session_state.quick_brands:
+        st.markdown("#### Session Brands:")
+        for brand_name, brand_config in st.session_state.quick_brands.items():
+            st.write(f"🏢 **{brand_name}** - {brand_config.get('domain', 'No domain')}")
+    
+    # Status check
+    st.markdown("### ✅ Setup Status")
+    
+    has_apify = 'temp_apify_key' in st.session_state and st.session_state.temp_apify_key
+    has_claude = 'temp_claude_key' in st.session_state and st.session_state.temp_claude_key
+    has_brands = 'quick_brands' in st.session_state and st.session_state.quick_brands
+    
+    if has_apify:
+        st.success("✅ Apify API key configured")
+    else:
+        st.error("❌ Apify API key needed")
+    
+    if has_claude:
+        st.success("✅ Claude API key configured")  
+    else:
+        st.error("❌ Claude API key needed")
+    
+    if has_brands:
+        st.success(f"✅ {len(st.session_state.quick_brands)} brand(s) configured")
+    else:
+        st.warning("⚠️ No brands configured yet")
+    
+    if has_apify and has_claude and has_brands:
+        st.success("🎉 **Ready to run analysis!** Go to 'Run Analysis' page.")
+        if st.button("🚀 Go to Analysis Page"):
+            st.session_state.page_redirect = "📊 Run Analysis"
+            st.rerun()
 
 def show_dashboard(config):
     """Dashboard overview"""
@@ -426,16 +748,25 @@ def show_run_analysis(config):
     """Run analysis interface"""
     st.markdown('<h2 class="section-header">📊 Run Analysis</h2>', unsafe_allow_html=True)
     
+    # Get session-enhanced config
+    session_config = get_session_config(config)
+    
+    # Check if using session brands
+    if 'quick_brands' in st.session_state and st.session_state.quick_brands:
+        session_config['brands'] = {**session_config.get('brands', {}), **st.session_state.quick_brands}
+    
     # Check configuration
     missing_config = []
-    if not config.get("apify", {}).get("api_token"):
+    if not session_config.get("apify", {}).get("api_token"):
         missing_config.append("Apify API token")
-    if not config.get("claude", {}).get("api_key"):
+    if not session_config.get("claude", {}).get("api_key"):
         missing_config.append("Claude API key")
     
     if missing_config:
         st.error(f"❌ Missing configuration: {', '.join(missing_config)}")
-        st.info("Please configure these in the Settings page before running analysis.")
+        st.markdown("### Quick Fix Options:")
+        st.markdown("1. **New users**: Go to '🔑 Quick Setup' to enter your API keys")
+        st.markdown("2. **Existing users**: Configure keys in 'Settings' page")
         return
     
     # Analysis options
@@ -444,10 +775,13 @@ def show_run_analysis(config):
     col1, col2 = st.columns(2)
     
     with col1:
-        active_brands = [name for name, conf in config["brands"].items() if conf.get("active", True)]
+        active_brands = [name for name, conf in session_config.get("brands", {}).items() if conf.get("active", True)]
         
         if not active_brands:
-            st.error("❌ No active brands configured. Please add brands in Brand Management.")
+            st.error("❌ No active brands configured.")
+            st.markdown("**Add brands via:**")
+            st.markdown("- '🔑 Quick Setup' for temporary brands")
+            st.markdown("- 'Brand Management' for permanent brands")
             return
         
         brand_filter = st.selectbox(
@@ -459,7 +793,7 @@ def show_run_analysis(config):
     with col2:
         include_notifications = st.checkbox(
             "Send Notifications",
-            value=config["notifications"]["enabled"],
+            value=session_config.get("notifications", {}).get("enabled", False),
             help="Send results via webhook to Slack"
         )
     
@@ -473,19 +807,13 @@ def show_run_analysis(config):
             
             with st.spinner("Running competitive intelligence analysis..."):
                 try:
-                    # Initialize tool with current config
-                    if is_using_secrets():
-                        # For Streamlit Cloud, pass config directly
-                        intel = CompetitiveIntel()
-                        intel.config = config
-                    else:
-                        # For local deployment, use config file
-                        intel = CompetitiveIntel("config.json")
+                    # Initialize tool with session config
+                    intel = CompetitiveIntel()
+                    intel.config = session_config
                     
-                    # Override notification setting if disabled (create new config)
+                    # Override notification setting if disabled
                     if not include_notifications:
-                        # Don't modify the original config, create a temporary override
-                        pass  # Will be handled in the intel class
+                        intel.config["notifications"]["enabled"] = False
                     
                     # Run analysis
                     brand_to_analyze = None if brand_filter == "All Active Brands" else brand_filter
@@ -495,22 +823,39 @@ def show_run_analysis(config):
                     
                     with progress_container.container():
                         st.info("🔄 Starting analysis...")
-                        report = intel.run_analysis(brand_to_analyze)
+                        report, insights = intel.run_analysis(brand_to_analyze)
                     
                     if report:
                         st.success("✅ Analysis completed successfully!")
+                        
+                        # Store insights in session state for visual dashboard
+                        st.session_state.analysis_insights = insights
+                        
+                        # Show summary metrics
+                        total_ads = sum(brand_insights.get('performance_indicators', {}).get('total_ads', 0) 
+                                      for brand_insights in insights.values())
+                        st.metric("Total Ads Analyzed", total_ads)
                         
                         # Show report preview
                         st.markdown("### 📄 Report Preview")
                         st.markdown(report[:1000] + "..." if len(report) > 1000 else report)
                         
-                        # Download link
-                        st.download_button(
-                            "📥 Download Full Report",
-                            data=report,
-                            file_name=f"competitive_analysis_{datetime.now().strftime('%Y%m%d_%H%M%S')}.md",
-                            mime="text/markdown"
-                        )
+                        # Action buttons
+                        col1, col2, col3 = st.columns(3)
+                        with col1:
+                            st.download_button(
+                                "📥 Download Full Report",
+                                data=report,
+                                file_name=f"competitive_analysis_{datetime.now().strftime('%Y%m%d_%H%M%S')}.md",
+                                mime="text/markdown"
+                            )
+                        with col2:
+                            if st.button("📈 View Visual Insights"):
+                                st.session_state.page_redirect = "📈 Visual Insights"
+                                st.rerun()
+                        with col3:
+                            if insights:
+                                st.success(f"📊 {len(insights)} brands analyzed")
                     else:
                         st.error("❌ Analysis failed. Check logs for details.")
                         
